@@ -1,0 +1,151 @@
+// src/Pickups.jsx
+// Power-ups: escudo (azul), arma (dourado) e bomba (vermelho).
+import { useEffect, useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
+import * as THREE from 'three'
+import { game, CONFIG, frameDt } from './gameState'
+import { sfx } from './audio'
+
+const MAX = 8
+const TYPES = ['shield', 'weapon', 'bomb']
+const toShip = new THREE.Vector3()
+
+const mat = (r, g, b) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), toneMapped: false })
+const MATS = {
+  shield: mat(0.5, 1.6, 3.5),
+  weapon: mat(3.5, 2.4, 0.4),
+  bomb: mat(3.5, 0.5, 0.4),
+  core: mat(2.5, 2.5, 2.5),
+}
+
+function ShieldModel() {
+  return (
+    <group>
+      <mesh material={MATS.shield}>
+        <torusGeometry args={[1, 0.12, 8, 32]} />
+      </mesh>
+      <mesh material={MATS.core}>
+        <boxGeometry args={[0.9, 0.25, 0.25]} />
+      </mesh>
+      <mesh material={MATS.core}>
+        <boxGeometry args={[0.25, 0.9, 0.25]} />
+      </mesh>
+    </group>
+  )
+}
+
+function WeaponModel() {
+  return (
+    <group>
+      <mesh material={MATS.weapon}>
+        <octahedronGeometry args={[0.7, 0]} />
+      </mesh>
+      <mesh material={MATS.weapon} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[1.05, 0.06, 6, 32]} />
+      </mesh>
+    </group>
+  )
+}
+
+function BombModel() {
+  return (
+    <group>
+      <mesh material={MATS.bomb}>
+        <sphereGeometry args={[0.55, 16, 12]} />
+      </mesh>
+      <mesh material={MATS.bomb}>
+        <torusGeometry args={[1, 0.08, 6, 32]} />
+      </mesh>
+      <mesh material={MATS.bomb} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[1, 0.08, 6, 32]} />
+      </mesh>
+    </group>
+  )
+}
+
+export default function Pickups() {
+  const groups = useRef([])
+  const models = useRef([])
+  const pool = useMemo(
+    () => Array.from({ length: MAX }, () => ({ active: false, type: 'shield', pos: new THREE.Vector3(), t: 0 })),
+    []
+  )
+
+  useEffect(() => {
+    game.spawnPickup = (type, pos) => {
+      const p = pool.find((q) => !q.active)
+      if (!p) return
+      p.active = true
+      p.type = type
+      p.pos.copy(pos)
+      p.t = 0
+    }
+  }, [pool])
+
+  function collect(p) {
+    p.active = false
+    sfx.pickup()
+    game.fx.sparks(p.pos, p.type === 'shield' ? 'blue' : p.type === 'weapon' ? 'orange' : 'bomb', 20)
+    let key = 'pickup_' + p.type
+    if (p.type === 'shield') {
+      game.shield = Math.min(CONFIG.maxShield, game.shield + 35)
+    } else if (p.type === 'weapon') {
+      if (game.weaponLevel < 2) {
+        game.weaponLevel++
+        key = 'pickup_weapon' + game.weaponLevel
+      } else {
+        game.score += 500
+        key = 'pickup_weaponMax'
+      }
+    } else {
+      game.bombs = Math.min(9, game.bombs + 1)
+    }
+    game.events.push({ type: 'pickup', key })
+  }
+
+  useFrame((_, delta) => {
+    const dt = frameDt(delta)
+    if (!dt) return
+    for (let i = 0; i < MAX; i++) {
+      const p = pool[i]
+      const g = groups.current[i]
+      if (p.active) {
+        p.t += dt
+        p.pos.z += CONFIG.worldSpeed * 0.35 * game.worldMul * dt
+        // Ímã: perto da nave, o item é puxado até ela
+        toShip.subVectors(game.shipPos, p.pos)
+        const d = toShip.length()
+        if (d < 10) p.pos.addScaledVector(toShip.normalize(), 22 * dt)
+        if (game.phase === 'playing' && d < 3.2) collect(p)
+        if (p.pos.z > 20) p.active = false
+      }
+      g.visible = p.active
+      if (!p.active) continue
+      g.position.copy(p.pos)
+      g.position.y += Math.sin(p.t * 3) * 0.3
+      g.rotation.set(0, p.t * 2, Math.sin(p.t) * 0.3)
+      const ms = models.current[i]
+      for (let j = 0; j < 3; j++) ms[j].visible = TYPES[j] === p.type
+    }
+  })
+
+  return (
+    <>
+      {Array.from({ length: MAX }, (_, i) => (
+        <group key={i} ref={(el) => (groups.current[i] = el)} visible={false}>
+          {[ShieldModel, WeaponModel, BombModel].map((Model, j) => (
+            <group
+              key={j}
+              ref={(el) => {
+                if (!models.current[i]) models.current[i] = []
+                models.current[i][j] = el
+              }}
+            >
+              <Model />
+            </group>
+          ))}
+        </group>
+      ))}
+    </>
+  )
+}

@@ -1,24 +1,47 @@
 // src/App.jsx
-import { useEffect, useRef, useState } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { Stars } from '@react-three/drei'
-import * as THREE from 'three'
+import { useEffect } from 'react'
+import { Canvas } from '@react-three/fiber'
+import Environment from './Environment'
 import Player from './Player'
+import Wingmen from './Wingmen'
 import Lasers from './Lasers'
+import EnemyLasers from './EnemyLasers'
+import Enemies from './Enemies'
 import Asteroids from './Asteroids'
-import { game, BOUNDS, CONFIG } from './gameState'
+import Pickups from './Pickups'
+import Boss from './Boss'
+import Explosions from './Explosions'
+import Director from './Director'
+import Effects from './Effects'
+import Hud from './ui/Hud'
+import Radio from './ui/Radio'
+import Screens from './ui/Screens'
+import { game, BOUNDS } from './gameState'
+import { ui, useUI } from './store'
+import { startGame, togglePause } from './flow'
+import { toggleMute } from './audio'
 
 // ---------------------------------------------------------------------------
 // Entrada (mouse + teclado) → escreve no estado global `game`
 // ---------------------------------------------------------------------------
 function useInput() {
   useEffect(() => {
+    const playing = () => game.phase === 'playing'
+
     const onKeyDown = (e) => {
       game.keys[e.code] = true
       if (e.code === 'Space') {
         e.preventDefault()
-        game.wantsToFire = true
+        if (playing()) game.wantsToFire = true
       }
+      if (e.repeat) return
+      if (e.code === 'KeyQ') game.rollRequest = -1
+      if (e.code === 'KeyE') game.rollRequest = 1
+      if (e.code === 'KeyB') game.wantsBomb = true
+      if (e.code === 'KeyP' || e.code === 'Escape') togglePause()
+      if (e.code === 'KeyM') ui.set({ muted: toggleMute() })
+      const phase = ui.get().phase
+      if (e.code === 'Enter' && (phase === 'title' || phase === 'gameover' || phase === 'victory')) startGame()
     }
     const onKeyUp = (e) => {
       game.keys[e.code] = false
@@ -28,15 +51,24 @@ function useInput() {
     // Converte o mouse de pixels para coordenadas normalizadas (-1..1)
     // e mapeia direto para o "quadrado" de movimento da nave.
     const onMouseMove = (e) => {
+      if (!playing()) return
       const nx = (e.clientX / window.innerWidth) * 2 - 1 // esquerda -1 → direita +1
       const ny = -((e.clientY / window.innerHeight) * 2 - 1) // baixo -1 → cima +1 (Y da tela é invertido)
       game.target.set(nx * BOUNDS.x, ny * BOUNDS.y)
     }
     const onMouseDown = (e) => {
-      if (e.button === 0) game.wantsToFire = true
+      if (e.button === 0 && playing()) game.wantsToFire = true
+      if (e.button === 2) game.wantsBomb = true
     }
     const onMouseUp = (e) => {
       if (e.button === 0) game.wantsToFire = false
+    }
+    const onContextMenu = (e) => e.preventDefault()
+    // Pausa sozinho se o jogador trocar de aba
+    const onVisibility = () => {
+      if (document.hidden && playing()) togglePause()
+      game.keys = {}
+      game.wantsToFire = false
     }
 
     window.addEventListener('keydown', onKeyDown)
@@ -44,92 +76,66 @@ function useInput() {
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mousedown', onMouseDown)
     window.addEventListener('mouseup', onMouseUp)
+    window.addEventListener('contextmenu', onContextMenu)
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mousedown', onMouseDown)
       window.removeEventListener('mouseup', onMouseUp)
+      window.removeEventListener('contextmenu', onContextMenu)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [])
 }
 
-// ---------------------------------------------------------------------------
-// Poeira espacial: pontinhos passando em +Z → sensação de velocidade
-// (as <Stars/> ficam "no infinito" e não dão sensação de avanço sozinhas)
-// ---------------------------------------------------------------------------
-const DUST_COUNT = 500
-function SpaceDust() {
-  const ref = useRef()
-  const positions = useRef(
-    (() => {
-      const arr = new Float32Array(DUST_COUNT * 3)
-      for (let i = 0; i < DUST_COUNT; i++) {
-        arr[i * 3] = THREE.MathUtils.randFloatSpread(80)
-        arr[i * 3 + 1] = THREE.MathUtils.randFloatSpread(50)
-        arr[i * 3 + 2] = THREE.MathUtils.randFloat(-200, 20)
-      }
-      return arr
-    })()
-  ).current
-
-  useFrame((_, delta) => {
-    const dt = Math.min(delta, 0.05)
-    for (let i = 0; i < DUST_COUNT; i++) {
-      positions[i * 3 + 2] += CONFIG.worldSpeed * dt // z = z + v * dt
-      if (positions[i * 3 + 2] > 20) positions[i * 3 + 2] -= 220 // volta para o fundo
-    }
-    ref.current.geometry.attributes.position.needsUpdate = true
-  })
-
+// Tudo que pertence a uma partida. Trocar a `key` (runId) remonta e zera os pools.
+function World() {
   return (
-    <points ref={ref} frustumCulled={false}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-      </bufferGeometry>
-      <pointsMaterial size={0.12} color="#9fb6ff" transparent opacity={0.7} />
-    </points>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// HUD (DOM por cima do Canvas). Lê o estado global 10x por segundo.
-// ---------------------------------------------------------------------------
-function Hud() {
-  const [stats, setStats] = useState({ score: 0, hits: 0 })
-  useEffect(() => {
-    const id = setInterval(() => setStats({ score: game.score, hits: game.hits }), 100)
-    return () => clearInterval(id)
-  }, [])
-  return (
-    <div className="hud">
-      <div>PONTOS: {stats.score}</div>
-      <div>DANOS: {stats.hits}</div>
-      <div className="hint">Mouse / WASD para mover · Clique / Espaço para atirar</div>
-    </div>
+    <>
+      <Player />
+      <Wingmen />
+      <Lasers />
+      <EnemyLasers />
+      <Enemies />
+      <Asteroids />
+      <Pickups />
+      <Boss />
+      <Explosions />
+      <Director />
+    </>
   )
 }
 
 export default function App() {
   useInput()
+  const runId = useUI((s) => s.runId)
+  const phase = useUI((s) => s.phase)
 
   return (
     <>
-      <Canvas camera={{ position: [0, 2.8, 11], fov: 70, near: 0.1, far: 1000 }} dpr={[1, 2]}>
-        <color attach="background" args={['#02030a']} />
-        <fog attach="fog" args={['#02030a', 80, 240]} />
+      <Canvas
+        className={phase === 'playing' ? 'playing' : ''}
+        camera={{ position: [0, 2.8, 11], fov: 70, near: 0.1, far: 1500 }}
+        dpr={[1, 2]}
+        gl={{ antialias: false, powerPreference: 'high-performance' }}
+      >
+        <color attach="background" args={['#03040c']} />
+        <fog attach="fog" args={['#05071a', 120, 300]} />
 
         <ambientLight intensity={0.35} />
-        <directionalLight position={[5, 10, 5]} intensity={1.6} />
+        <hemisphereLight args={['#9fc4ff', '#2a0f1a', 0.6]} />
+        <directionalLight position={[8, 10, 6]} intensity={2.4} color="#fff1dc" />
+        <directionalLight position={[-6, -3, -8]} intensity={0.8} color="#4f7dff" />
 
-        <Stars radius={200} depth={80} count={7000} factor={5} saturation={0} fade speed={1} />
-        <SpaceDust />
-
-        <Player />
-        <Lasers />
-        <Asteroids />
+        <Environment />
+        <World key={runId} />
+        <Effects />
       </Canvas>
       <Hud />
+      <Radio />
+      <Screens />
     </>
   )
 }
