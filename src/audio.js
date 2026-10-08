@@ -434,16 +434,58 @@ export function stopMusic() {
 // ---------------------------------------------------------------------------
 // Faixas de áudio e transição suave (Fade Out)
 // ---------------------------------------------------------------------------
-export const musicaIntro = typeof Audio !== 'undefined' ? new Audio('/audio/intro.mp3') : null
-export const musicaJogo = typeof Audio !== 'undefined' ? new Audio('/audio/game.mp3') : null
+export const resolveAudioUrl = (subpath) => {
+  const base = import.meta.env.BASE_URL || './'
+  const cleanBase = base.endsWith('/') ? base : base + '/'
+  const cleanSub = subpath.replace(/^\//, '')
+  return cleanBase + cleanSub
+}
+
+const INTRO_CANDIDATES = [
+  'audio/intro.mp3',
+  'audio/intro.wav',
+  'audio/intro.ogg',
+  'audio/intro.m4a',
+  'audio/Intro.mp3',
+  'intro.mp3',
+  'intro.wav',
+]
+
+const GAME_CANDIDATES = [
+  'audio/game.mp3',
+  'audio/game.wav',
+  'audio/game.ogg',
+  'audio/game.m4a',
+  'audio/Game.mp3',
+  'game.mp3',
+  'game.wav',
+]
+
+function setupFallback(audio, list) {
+  if (!audio) return
+  let idx = 0
+  audio.src = resolveAudioUrl(list[idx])
+  audio.addEventListener('error', () => {
+    if (idx + 1 < list.length) {
+      idx++
+      audio.src = resolveAudioUrl(list[idx])
+      audio.load()
+    }
+  })
+}
+
+export const musicaIntro = typeof Audio !== 'undefined' ? new Audio() : null
+export const musicaJogo = typeof Audio !== 'undefined' ? new Audio() : null
 
 if (musicaIntro) {
   musicaIntro.loop = true
   musicaIntro.volume = 0.8
+  setupFallback(musicaIntro, INTRO_CANDIDATES)
 }
 if (musicaJogo) {
   musicaJogo.loop = true
   musicaJogo.volume = 0.8
+  setupFallback(musicaJogo, GAME_CANDIDATES)
 }
 
 // Persistência de arquivos de áudio customizados no IndexedDB
