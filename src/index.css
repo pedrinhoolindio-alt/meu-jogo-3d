@@ -555,7 +555,33 @@ kbd {
   .hud-bottom-left {
     width: 160px;
   }
+  /* Em telas estreitas o rádio vai para o topo, para não cobrir a nave */
   .radio {
-    bottom: 120px;
+    top: 96px;
+    bottom: auto;
+    padding: 6px 10px 6px 6px;
+  }
+  .radio-portrait {
+    width: 60px;
+    height: 60px;
+  }
+  .radio-text {
+    font-size: 15px;
+  }
+  .hud-top-center {
+    top: 60px;
+    width: calc(100vw - 32px);
+  }
+  .score {
+    font-size: 26px;
+  }
+}
+
+@media (max-height: 560px) {
+  .crew-card {
+    width: 96px;
+  }
+  .story {
+    display: none;
   }
 }
