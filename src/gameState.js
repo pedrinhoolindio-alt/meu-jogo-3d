@@ -164,7 +164,11 @@ const noop = () => {}
 export const game = {
   phase: 'title', // title | briefing | playing | debrief | paused | dying | gameover | victory
   keys: {}, // teclas pressionadas (KeyW, KeyA, Space...)
-  target: new THREE.Vector2(0, 0), // posição X/Y DESEJADA da nave (mouse/WASD escrevem aqui)
+  stickX: 0, // controle analógico / touch joystick (-1..1)
+  stickY: 0,
+  autoFire: false, // disparo automático para dispositivos móveis
+  touchBoost: false, // turbo via botão de toque
+  target: new THREE.Vector2(0, 0), // posição X/Y DESEJADA da nave (mouse/WASD/touch escrevem aqui)
   shipPos: new THREE.Vector3(), // posição real da nave
   shipQuat: new THREE.Quaternion(), // rotação real da nave (para posicionar os canhões com o roll)
   aim: new THREE.Vector3(0, 0, -45), // ponto da mira no mundo
@@ -195,6 +199,9 @@ export function resetGame() {
     worldMul: 1, // multiplicador de velocidade do cenário (turbo)
     wantsToFire: false,
     wantsBomb: false,
+    stickX: 0,
+    stickY: 0,
+    touchBoost: false,
     rollRequest: 0,
     rollTimer: 0,
     rollDir: 1,

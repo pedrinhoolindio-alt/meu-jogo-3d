@@ -13,12 +13,15 @@ export const ORG_COLORS = { SESC: '#e8402f', SENAC: '#2f8fff', FECOMÉRCIO: '#2f
 function Controls() {
   return (
     <div className="controls">
-      <div><kbd>Mouse</kbd> / <kbd>WASD</kbd> mover</div>
-      <div><kbd>Clique</kbd> / <kbd>Espaço</kbd> atirar</div>
-      <div><kbd>Shift</kbd> turbo</div>
-      <div><kbd>Q</kbd> <kbd>E</kbd> giro evasivo (rebate lasers)</div>
-      <div><kbd>B</kbd> / <kbd>Botão direito</kbd> bomba</div>
-      <div><kbd>P</kbd> pausa · <kbd>M</kbd> som</div>
+      <div><kbd>Mouse</kbd> / <kbd>WASD</kbd> ou <b>Joystick Touch</b> mover</div>
+      <div><kbd>Clique</kbd> / <kbd>Espaço</kbd> ou <b>Botão TIRO</b> atirar</div>
+      <div><kbd>Shift</kbd> ou <b>Botão TURBO</b> acelerar</div>
+      <div><kbd>Q</kbd> <kbd>E</kbd> ou <b>Botão GIRO</b> esquiva</div>
+      <div><kbd>B</kbd> ou <b>Botão BOMBA</b> detonar</div>
+      <div><kbd>P</kbd> ou <b>Botão ⏸</b> pausar</div>
+      <div className="mobile-hint" style={{ gridColumn: '1 / -1', color: 'var(--cyan)', marginTop: '4px' }}>
+        📱 Celular: Use o Joystick na esquerda e os botões táticos na direita (com Auto-Tiro opcional)
+      </div>
     </div>
   )
 }

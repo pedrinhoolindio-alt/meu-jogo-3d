@@ -20,13 +20,18 @@ body,
   font-family: var(--font-body);
   color: #e6f1ff;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
 }
 
 canvas {
   display: block;
+  touch-action: none;
 }
 .playing canvas {
   cursor: none; /* a mira é desenhada no 3D */
+  touch-action: none;
 }
 
 /* ------------------------------------------------------------------ HUD */
@@ -1056,3 +1061,348 @@ kbd {
     font-size: 12px;
   }
 }
+
+/* -------------------------------------------------------- HUD TOP-RIGHT */
+.hud-top-right {
+  position: absolute;
+  top: 16px;
+  right: max(18px, env(safe-area-inset-right));
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+  z-index: 25;
+}
+.hud-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  touch-action: manipulation;
+  transition: transform 0.15s, background 0.15s, border-color 0.15s;
+}
+.hud-icon-btn:active {
+  transform: scale(0.92);
+  background: rgba(30, 60, 110, 0.85);
+  border-color: var(--cyan);
+}
+.hud-icon-btn.pause-btn {
+  color: var(--cyan);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+/* ---------------------------------------------------- CONTROLES DE TOQUE */
+.touch-controls-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+}
+
+/* Joystick Analógico Esquerdo */
+.touch-joystick-base {
+  position: absolute;
+  left: max(18px, env(safe-area-inset-left));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: 126px;
+  height: 126px;
+  border-radius: 50%;
+  background: rgba(6, 14, 32, 0.65);
+  border: 1px solid rgba(124, 243, 255, 0.45);
+  box-shadow: 0 0 20px rgba(124, 243, 255, 0.25), inset 0 0 14px rgba(124, 243, 255, 0.12);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  touch-action: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.joystick-ring {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.joystick-crosshair {
+  position: absolute;
+  background: rgba(124, 243, 255, 0.25);
+  pointer-events: none;
+}
+.joystick-crosshair.h {
+  width: 80%;
+  height: 1px;
+}
+.joystick-crosshair.v {
+  width: 1px;
+  height: 80%;
+}
+.joystick-arrow {
+  position: absolute;
+  font-size: 8px;
+  color: var(--cyan);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.joystick-arrow.up { top: 6px; }
+.joystick-arrow.down { bottom: 6px; }
+.joystick-arrow.left { left: 6px; }
+.joystick-arrow.right { right: 6px; }
+
+.joystick-knob {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #9ffffb, #2080ff 65%, #0d40aa);
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 16px rgba(124, 243, 255, 0.9), inset 0 0 8px rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: transform 0.04s ease-out;
+}
+.knob-core {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 8px #7cf3ff;
+}
+.joystick-label {
+  position: absolute;
+  bottom: -20px;
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--cyan);
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+/* Agrupamento de Ações à Direita */
+.touch-actions-group {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+/* Pílula de Auto-Tiro */
+.touch-pill-btn {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(6, 14, 32, 0.8);
+  border: 1px solid rgba(124, 243, 255, 0.35);
+  color: #9cb5db;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  touch-action: manipulation;
+  transition: all 0.15s ease;
+}
+.touch-pill-btn .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #46556e;
+  transition: all 0.2s;
+}
+.touch-pill-btn.active {
+  border-color: var(--cyan);
+  color: #ffffff;
+  background: linear-gradient(90deg, rgba(20, 80, 180, 0.85), rgba(10, 140, 180, 0.85));
+  box-shadow: 0 0 16px rgba(124, 243, 255, 0.5);
+}
+.touch-pill-btn.active .dot {
+  background: #7cf3ff;
+  box-shadow: 0 0 8px #7cf3ff;
+}
+
+/* Linha Tática (Giro, Turbo, Bomba) */
+.touch-tactical-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.touch-tactical-btn {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  touch-action: none;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.touch-tactical-btn:active {
+  transform: scale(0.92);
+}
+.touch-tactical-btn .icon {
+  font-size: 15px;
+  line-height: 1;
+}
+.touch-tactical-btn .txt {
+  font-size: 8px;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+.touch-tactical-btn.roll {
+  background: rgba(10, 26, 56, 0.8);
+  border-color: rgba(124, 243, 255, 0.5);
+  color: var(--cyan);
+}
+.touch-tactical-btn.boost {
+  background: rgba(56, 32, 10, 0.8);
+  border-color: rgba(255, 179, 71, 0.5);
+  color: #ffb347;
+}
+.touch-tactical-btn.boost.active {
+  background: linear-gradient(135deg, #ff7a20, #ffd040);
+  color: #100500;
+  box-shadow: 0 0 18px rgba(255, 160, 40, 0.9);
+}
+.touch-tactical-btn.bomb {
+  background: rgba(60, 15, 20, 0.85);
+  border-color: rgba(255, 77, 94, 0.6);
+  color: #ff4d5e;
+}
+.touch-tactical-btn.bomb .badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  background: #ff2a3a;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #fff;
+  box-shadow: 0 0 8px rgba(255, 42, 58, 0.8);
+}
+.touch-tactical-btn.disabled {
+  opacity: 0.35;
+  filter: grayscale(0.8);
+  pointer-events: none;
+}
+
+/* Botão Principal de Tiro */
+.touch-fire-btn {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff3c1e, #ff8c2a);
+  border: 2px solid rgba(255, 245, 210, 0.9);
+  box-shadow: 0 0 24px rgba(255, 80, 30, 0.7), inset 0 0 12px rgba(255, 255, 255, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  touch-action: none;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.touch-fire-btn:active,
+.touch-fire-btn.firing {
+  transform: scale(0.92);
+  box-shadow: 0 0 36px rgba(255, 60, 20, 1), inset 0 0 18px #ffffff;
+}
+.touch-fire-btn .fire-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.touch-fire-btn .fire-icon {
+  width: 26px;
+  height: 26px;
+  color: #fff;
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.5));
+}
+.touch-fire-btn .fire-text {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #ffffff;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.7);
+}
+
+/* ---------------------------------------------- ADAPTAÇÕES MOBILE (HUD) */
+@media (max-width: 860px) {
+  /* Em telas móveis, sobe os medidores para não colidir com o joystick e botões */
+  .hud-bottom-left {
+    bottom: 170px;
+    left: 16px;
+    width: 170px;
+  }
+  .hud-bottom-right {
+    bottom: 170px;
+    right: 16px;
+    text-align: right;
+  }
+  .hud-bottom-right .value {
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+  .hud-bottom-right .roll {
+    display: none; /* já tem o botão de toque específico para o giro */
+  }
+  .hud-top-left {
+    top: 14px;
+    left: 14px;
+  }
+  .hud-top-center {
+    top: 58px;
+    width: min(340px, 90vw);
+  }
+  .score {
+    font-size: 24px;
+  }
+  .mult {
+    font-size: 16px;
+  }
+  .meta-row {
+    font-size: 11px;
+  }
+  .btn {
+    padding: 10px 24px;
+    font-size: 14px;
+  }
+}
+

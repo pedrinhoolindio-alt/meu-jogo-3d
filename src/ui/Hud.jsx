@@ -3,7 +3,10 @@
 import { useEffect, useRef } from 'react'
 import { game, CONFIG } from '../gameState'
 import { missionProgress } from '../Director'
-import { useUI } from '../store'
+import { useUI, ui } from '../store'
+import { togglePause } from '../flow'
+import { toggleMute } from '../audio'
+import TouchControls from './TouchControls'
 
 const WEAPONS = ['LASER DUPLO', 'LASER QUÁDRUPLO', 'PLASMA']
 
@@ -121,6 +124,25 @@ export default function Hud() {
           </div>
         </div>
 
+        <div className="hud-top-right">
+          <button
+            type="button"
+            className="hud-icon-btn"
+            onClick={() => ui.set({ muted: toggleMute() })}
+            title="Ativar/desativar áudio [M]"
+          >
+            {ui.get().muted ? '🔇' : '🔊'}
+          </button>
+          <button
+            type="button"
+            className="hud-icon-btn pause-btn"
+            onClick={togglePause}
+            title="Pausar jogo [P / ESC]"
+          >
+            ⏸
+          </button>
+        </div>
+
         <div className="hud-bottom-left">
           <div className="label">
             ESCUDO <span ref={ref('shieldTxt')}>100</span>
@@ -148,6 +170,7 @@ export default function Hud() {
           ⚠ ESCUDO CRÍTICO ⚠
         </div>
         <Banner />
+        <TouchControls />
       </div>
     </>
   )

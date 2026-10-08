@@ -113,9 +113,10 @@ export default function Lasers() {
     if (!dt) return
     const playing = game.phase === 'playing'
 
-    // Disparo contínuo enquanto segura o botão/espaço, respeitando o cooldown
+    // Disparo contínuo enquanto segura o botão/espaço ou com auto-tiro ativo, respeitando o cooldown
     cooldown.current -= dt
-    if (playing && game.wantsToFire && cooldown.current <= 0) {
+    const shouldFire = game.wantsToFire || game.autoFire
+    if (playing && shouldFire && cooldown.current <= 0) {
       fireFromShip()
       cooldown.current = CONFIG.fireCooldown[game.weaponLevel]
     }

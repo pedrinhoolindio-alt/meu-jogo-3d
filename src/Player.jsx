@@ -48,11 +48,13 @@ export default function Player() {
         // kx/ky ∈ {-1, 0, 1}. alvo = alvo + direção * velocidade * dt
         const kx = (k.KeyD || k.ArrowRight ? 1 : 0) - (k.KeyA || k.ArrowLeft ? 1 : 0)
         const ky = (k.KeyW || k.ArrowUp ? 1 : 0) - (k.KeyS || k.ArrowDown ? 1 : 0)
-        game.target.x += kx * CONFIG.keyboardSpeed * dt
-        game.target.y += ky * CONFIG.keyboardSpeed * dt
+        const moveX = kx + (game.stickX || 0)
+        const moveY = ky + (game.stickY || 0)
+        game.target.x += moveX * CONFIG.keyboardSpeed * dt
+        game.target.y += moveY * CONFIG.keyboardSpeed * dt
 
-        // ---------------- Turbo (Shift) ----------------
-        const wantBoost = (k.ShiftLeft || k.ShiftRight) && game.boost > 0.05
+        // ---------------- Turbo (Shift / Touch) ----------------
+        const wantBoost = (k.ShiftLeft || k.ShiftRight || game.touchBoost) && game.boost > 0.05
         game.boosting = wantBoost
         game.boost = clamp(game.boost + (wantBoost ? -CONFIG.boostDrain : CONFIG.boostRegen) * dt, 0, 1)
 
