@@ -1,4 +1,4 @@
-# Esquadrão Fênix — Operação Aurora
+# Esquadrão Fênix — Campanha de Metas Sesc & Senac Ceará
 
 Jogo de nave 3D on-rails no navegador, com clima de batalha espacial épica.
 Feito com React + Vite + Three.js + React Three Fiber + Drei + Postprocessing.
@@ -21,6 +21,21 @@ npm run dev
 | Bomba de prótons | B ou botão direito |
 | Pausa | P ou Esc |
 | Som | M |
+
+## Campanha
+
+| # | Org. | Missão | Indicador (meta) | Bônus |
+| --- | --- | --- | --- | --- |
+| 1 | SENAC | Campanha de Matrículas | 12 matrículas (abates) | Precisão ≥ 35% |
+| 2 | SESC | Saúde & Odontologia | 9 atendimentos (cápsulas verdes) | Terminar com escudo ≥ 50% |
+| 3 | SENAC | Ativo Aula: Turmas Confirmadas | 16 turmas (abates) | Sequência de 8 abates |
+| 4 | SESC | Turismo Social & Cultura | 11 passageiros (cápsulas) | Escudo nunca abaixo de 30% |
+| 5 | FECOMÉRCIO | Ouvidoria em Dia | 20 respostas (abates) | Precisão ≥ 40% |
+| 6 | SESC + SENAC | Fechamento Anual de Metas | Destruir a Fortaleza do Caos | Vencer com escudo ≥ 40% |
+
+Cada missão tem prazo. No fim, o relatório mostra meta × realizado, % de atingimento e estrelas
+(★ meta 100% · ★ superação 130% · ★ bônus). O fim da campanha traz o **Relatório Anual de Metas**.
+As missões ficam em `MISSIONS` (`src/gameState.js`) — dá para mudar metas, prazos e textos ali.
 
 ## O que tem no jogo
 

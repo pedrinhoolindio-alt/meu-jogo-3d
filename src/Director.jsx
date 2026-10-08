@@ -1,15 +1,14 @@
 // src/Director.jsx
-// "Diretor" da partida: controla as fases, o spawn de inimigos, o chefe
-// e decide quando cada personagem fala no rádio.
-import { useEffect, useRef } from 'react'
+// "Diretor" da campanha: controla a missão em andamento (prazo, inimigos, cápsulas de meta,
+// chefe) e decide quando cada personagem fala no rádio.
+import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { game, WAVES, CONFIG, BOUNDS, frameDt, rand } from './gameState'
-import { ui } from './store'
-import { sayLine } from './radio'
-import { sfx, setMusicIntensity } from './audio'
-import { endRun } from './flow'
+import { game, MISSIONS, BOUNDS, frameDt, rand } from './gameState'
+import { say, sayLine } from './radio'
+import { sfx } from './audio'
+import { endRun, finishMission } from './flow'
 
-// Marcos de pontuação em que o Sgt. Ramos elogia o jogador
+// Marcos de pontuação em que a equipe elogia o jogador
 const MILESTONES = [1000, 3000, 6000, 10000, 15000, 22000]
 
 function pickType(mix) {
@@ -20,9 +19,20 @@ function pickType(mix) {
   return Object.keys(mix)[0]
 }
 
+// Quanto da meta já foi realizado (0..∞)
+export function missionProgress() {
+  const m = MISSIONS[game.missionIndex]
+  const s = game.mstats
+  if (!m || !s) return { realized: 0, meta: 1, pct: 0, m }
+  const realized = m.indicator.type === 'kills' ? s.kills : m.indicator.type === 'tokens' ? s.tokens : game.bossDefeated ? 1 : 0
+  return { realized, meta: m.indicator.meta, pct: realized / m.indicator.meta, m }
+}
+
 export default function Director() {
   const s = useRef({
+    mission: -1,
     spawnT: 1.5,
+    tokenT: 2,
     milestone: 0,
     shieldLevel: 'ok',
     chatterT: rand(24, 34),
@@ -31,41 +41,18 @@ export default function Director() {
     hurtTip: false,
     bossStarted: false,
     victoryT: 0,
+    half: false,
+    full: false,
+    super: false,
+    deadline: false,
+    briefed: false,
   })
-
-  // Briefing inicial
-  useEffect(() => {
-    if (game.phase !== 'playing') return
-    const id = setTimeout(() => {
-      sayLine('briefing', { priority: 2 })
-      sayLine('briefing2', { priority: 1 })
-    }, 900)
-    return () => clearTimeout(id)
-  }, [])
-
-  function nextWave() {
-    game.waveIndex++
-    game.waveKills = 0
-    game.waveBreak = 4
-    game.score += 1000 // bônus por completar a fase
-    game.shield = Math.min(CONFIG.maxShield, game.shield + 15)
-    const w = WAVES[game.waveIndex]
-    ui.set({ banner: { id: Date.now(), title: w.title, sub: w.name, alert: !!w.boss } })
-    if (w.boss) {
-      sfx.warning()
-      sayLine('bossWarning', { priority: 3 })
-      sayLine('bossTaunt', { priority: 2 })
-      sayLine('bossTip', { priority: 2 })
-    } else {
-      sayLine('wave' + game.waveIndex, { priority: 2 })
-    }
-  }
 
   function processEvents(st) {
     for (const ev of game.events) {
       switch (ev.type) {
         case 'wingKill':
-          if (Math.random() < 0.35) sayLine('wingKill', { priority: 0, cooldown: 10 })
+          if (Math.random() < 0.3) sayLine('wingKill', { priority: 0, cooldown: 10 })
           break
         case 'pickup':
           sayLine(ev.key, { priority: 1 })
@@ -131,27 +118,41 @@ export default function Director() {
     }
     if (game.phase !== 'playing') return
 
-    // ---- Fases ----
-    const w = WAVES[game.waveIndex]
-    game.asteroidEvery = w.asteroidEvery
-    if (game.waveBreak > 0) {
-      game.waveBreak -= dt
-    } else if (w.boss) {
+    const m = MISSIONS[game.missionIndex]
+    // Nova missão: zera os gatilhos dela
+    if (st.mission !== game.missionIndex) {
+      Object.assign(st, { mission: game.missionIndex, spawnT: 2, tokenT: 1.5, half: false, full: false, super: false, deadline: false, briefed: false })
+    }
+    game.asteroidEvery = m.asteroidEvery
+
+    if (!st.briefed) {
+      st.briefed = true
+      if (game.missionIndex === 0) {
+        sayLine('briefing', { priority: 2 })
+        sayLine('briefing2', { priority: 1 })
+      }
+    }
+
+    if (m.boss) {
+      // ---- Missão final: chefe ----
       if (!st.bossStarted) {
         st.bossStarted = true
         game.startBoss()
-        setMusicIntensity(2)
       }
       if (game.bossDefeated) {
         st.victoryT += dt
-        if (st.victoryT > 4) endRun('victory')
+        if (st.victoryT > 3.5) finishMission()
       }
     } else {
+      // ---- Prazo ----
+      game.missionTime -= dt
+
+      // ---- Inimigos ----
       st.spawnT -= dt
       const alive = game.enemies.reduce((n, e) => n + (e.active ? 1 : 0), 0)
-      if (st.spawnT <= 0 && alive < w.maxAlive) {
-        const type = pickType(w.mix)
-        if (type === 'fighter' && game.waveIndex >= 1 && Math.random() < 0.3) {
+      if (st.spawnT <= 0 && alive < m.maxAlive) {
+        const type = pickType(m.mix)
+        if (type === 'fighter' && game.missionIndex >= 1 && Math.random() < 0.3) {
           // Formação em "V" com 3 caças
           const x = rand(-1, 1) * BOUNDS.x
           const y = rand(-1, 1) * BOUNDS.y
@@ -161,15 +162,47 @@ export default function Director() {
         } else {
           game.spawnEnemy(type)
         }
-        st.spawnT = w.spawnEvery * rand(0.7, 1.3)
+        st.spawnT = m.spawnEvery * rand(0.7, 1.3)
       }
-      if (game.waveKills >= w.quota) nextWave()
+
+      // ---- Cápsulas de meta (missões de coleta) ----
+      if (m.tokenEvery) {
+        st.tokenT -= dt
+        if (st.tokenT <= 0 && game.missionTime > 4) {
+          st.tokenT = m.tokenEvery * rand(0.8, 1.2)
+          game.spawnPickup('goal', { x: rand(-1, 1) * BOUNDS.x * 1.15, y: rand(-1, 1) * BOUNDS.y * 1.15, z: -150 })
+        }
+      }
+
+      // ---- Acompanhamento da meta pelo rádio ----
+      const { pct, realized } = missionProgress()
+      const label = m.indicator.label
+      if (!st.half && pct >= 0.5) {
+        st.half = true
+        say('alan', `Painel atualizado: ${realized} ${label}. Já são ${Math.round(pct * 100)}% da meta!`, { priority: 1 })
+      }
+      if (!st.full && pct >= 1) {
+        st.full = true
+        say(m.org === 'SESC' ? 'ivone' : 'janiele', `META BATIDA! ${realized} ${label}. Agora é superação, Pedro!`, { priority: 2 })
+      }
+      if (!st.super && pct >= 1.3) {
+        st.super = true
+        say('roberta', `Superação de 30%! Esse resultado vai direto para o relatório da diretoria.`, { priority: 2 })
+      }
+      if (!st.deadline && game.missionTime <= 15 && pct < 1) {
+        st.deadline = true
+        say('ivone', `Atenção: faltam 15 segundos e estamos em ${Math.round(pct * 100)}% da meta. Acelera!`, { priority: 3 })
+      }
+
+      if (game.missionTime <= 0) {
+        finishMission()
+        return
+      }
     }
 
-    // ---- Gatilhos de rádio ----
-    // Soldado elogia ao atingir marcos de pontuação
+    // ---- Gatilhos gerais do rádio ----
     while (st.milestone < MILESTONES.length && game.score >= MILESTONES[st.milestone]) {
-      sayLine('praise', { priority: 1 }, st.milestone)
+      sayLine('praise', { priority: 0 }, st.milestone)
       st.milestone++
     }
 
@@ -199,7 +232,7 @@ export default function Director() {
 
     st.chatterT -= dt
     if (st.chatterT <= 0) {
-      st.chatterT = rand(25, 40)
+      st.chatterT = rand(28, 42)
       sayLine('chatter', { priority: 0 })
     }
   })

@@ -36,7 +36,7 @@ export const CAST = {
   },
   korrath: {
     name: 'Almirante Vex Korrath',
-    role: 'Armada Escarlate',
+    role: 'Armada do Caos Operacional',
     color: '#ff4d5e',
     hostile: true,
   },
@@ -45,12 +45,12 @@ export const CAST = {
 const l = (who, text) => ({ who, text })
 
 export const LINES = {
-  briefing: [l('roberta', 'Esquadrão Fênix, aqui é a comandante Roberta. A Armada Escarlate cruzou o Cinturão de Kepler. Pedro, você lidera. Segurem a linha!')],
+  briefing: [l('roberta', 'Esquadrão Fênix, aqui é a comandante Roberta. As metas do Sesc e do Senac dependem de vocês. Pedro, você lidera!')],
   briefing2: [l('janiele', 'Janiele na sua asa esquerda, Pedro. Equipe pronta — vamos mostrar como se voa!')],
   wave1: [l('ivone', 'Centro de Comando: primeira linha rompida! Interceptadores entrando pelos flancos.')],
   wave2: [l('ivone', 'Centro de Comando: bombardeiros pesados no radar. Derrubem antes que alcancem a Aurora!')],
   bossWarning: [l('ivone', 'Alerta máximo! Assinatura gigante saindo do hiperespaço... é a Fortaleza Korrath!')],
-  bossTaunt: [l('korrath', 'Pilotos do Fênix... vieram morrer em grande estilo. Fortaleza, abrir fogo!')],
+  bossTaunt: [l('korrath', 'Fechamento de metas? Não enquanto o Caos Operacional existir! Fortaleza, abrir fogo!')],
   bossTip: [l('alan', 'Analisei a fortaleza: o núcleo tem escudo. Derrubem as quatro torres primeiro!')],
 
   // Elogios da chefe da equipe em marcos de pontuação (ordem dos marcos no Director)
@@ -99,8 +99,8 @@ export const LINES = {
   turretDown: [l('janiele', 'Uma torre a menos! Continuem martelando!')],
   coreExposed: [l('alan', 'O escudo do núcleo caiu! Mirem no centro vermelho!')],
   bossHalf: [l('korrath', 'Impossível! Escoltas, protejam a fortaleza!')],
-  bossDown: [l('korrath', 'Isso... não acabou, Fênix...')],
-  victory: [l('roberta', 'Fortaleza destruída! Pedro, você e a equipe salvaram a frota. Voltem pra casa.')],
+  bossDown: [l('korrath', 'Impossível... metas... batidas...')],
+  victory: [l('roberta', 'Fortaleza destruída! Pedro, o ano está fechado com as metas do Sesc e do Senac garantidas. Orgulho dessa equipe!')],
   playerDown: [l('roberta', 'Fênix Líder foi atingido! Equipes de resgate, agora!')],
 }
 

@@ -6,8 +6,8 @@ import * as THREE from 'three'
 import { game, CONFIG, frameDt } from './gameState'
 import { sfx } from './audio'
 
-const MAX = 8
-const TYPES = ['shield', 'weapon', 'bomb']
+const MAX = 14
+const TYPES = ['shield', 'weapon', 'bomb', 'goal']
 const toShip = new THREE.Vector3()
 
 const mat = (r, g, b) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), toneMapped: false })
@@ -16,6 +16,8 @@ const MATS = {
   weapon: mat(3.5, 2.4, 0.4),
   bomb: mat(3.5, 0.5, 0.4),
   core: mat(2.5, 2.5, 2.5),
+  goal: mat(0.6, 3.2, 1.2),
+  goalCore: mat(3, 3.4, 2.6),
 }
 
 function ShieldModel() {
@@ -63,6 +65,23 @@ function BombModel() {
   )
 }
 
+// Cápsula de meta (atendimentos, passageiros...): anel hexagonal verde com núcleo brilhante
+function GoalModel() {
+  return (
+    <group scale={1.25}>
+      <mesh material={MATS.goal}>
+        <torusGeometry args={[1, 0.1, 6, 6]} />
+      </mesh>
+      <mesh material={MATS.goal} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.8, 0.05, 6, 24]} />
+      </mesh>
+      <mesh material={MATS.goalCore}>
+        <icosahedronGeometry args={[0.38, 0]} />
+      </mesh>
+    </group>
+  )
+}
+
 export default function Pickups() {
   const groups = useRef([])
   const models = useRef([])
@@ -72,6 +91,7 @@ export default function Pickups() {
   )
 
   useEffect(() => {
+    game.pickups = pool
     game.spawnPickup = (type, pos) => {
       const p = pool.find((q) => !q.active)
       if (!p) return
@@ -85,7 +105,14 @@ export default function Pickups() {
   function collect(p) {
     p.active = false
     sfx.pickup()
-    game.fx.sparks(p.pos, p.type === 'shield' ? 'blue' : p.type === 'weapon' ? 'orange' : 'bomb', 20)
+    game.fx.sparks(p.pos, p.type === 'shield' ? 'blue' : p.type === 'weapon' ? 'orange' : p.type === 'goal' ? 'green' : 'bomb', 20)
+    if (p.type === 'goal') {
+      // Conta para a meta da missão
+      if (game.mstats) game.mstats.tokens++
+      game.score += 150
+      game.events.push({ type: 'token' })
+      return
+    }
     let key = 'pickup_' + p.type
     if (p.type === 'shield') {
       game.shield = Math.min(CONFIG.maxShield, game.shield + 35)
@@ -115,7 +142,8 @@ export default function Pickups() {
         // Ímã: perto da nave, o item é puxado até ela
         toShip.subVectors(game.shipPos, p.pos)
         const d = toShip.length()
-        if (d < 10) p.pos.addScaledVector(toShip.normalize(), 22 * dt)
+        const magnet = p.type === 'goal' ? 13 : 10
+        if (d < magnet) p.pos.addScaledVector(toShip.normalize(), 26 * dt)
         if (game.phase === 'playing' && d < 3.2) collect(p)
         if (p.pos.z > 20) p.active = false
       }
@@ -125,7 +153,7 @@ export default function Pickups() {
       g.position.y += Math.sin(p.t * 3) * 0.3
       g.rotation.set(0, p.t * 2, Math.sin(p.t) * 0.3)
       const ms = models.current[i]
-      for (let j = 0; j < 3; j++) ms[j].visible = TYPES[j] === p.type
+      for (let j = 0; j < TYPES.length; j++) ms[j].visible = TYPES[j] === p.type
     }
   })
 
@@ -133,7 +161,7 @@ export default function Pickups() {
     <>
       {Array.from({ length: MAX }, (_, i) => (
         <group key={i} ref={(el) => (groups.current[i] = el)} visible={false}>
-          {[ShieldModel, WeaponModel, BombModel].map((Model, j) => (
+          {[ShieldModel, WeaponModel, BombModel, GoalModel].map((Model, j) => (
             <group
               key={j}
               ref={(el) => {

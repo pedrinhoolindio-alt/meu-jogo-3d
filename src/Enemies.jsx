@@ -78,7 +78,8 @@ export default function Enemies() {
     if (e.type === 'bomber') game.fx.shockwave(e.pos, 1.5)
     sfx.explosion(e.type === 'bomber')
     game.kills++
-    game.waveKills++
+    if (game.mstats) game.mstats.kills++ // conta para a meta da missão (toda a equipe)
+    game.events.push({ type: 'kill' })
     if (owner === 'player') addScore(T.score, 'player')
     else if (owner === 'wing') {
       addScore(T.score, 'wing')
@@ -134,7 +135,7 @@ export default function Enemies() {
     if (!dt) return
     const playing = game.phase === 'playing'
     // Os inimigos ficam mais agressivos a cada fase
-    const aggression = 1 - game.waveIndex * 0.08
+    const aggression = 1 - Math.min(game.missionIndex, 4) * 0.06
 
     for (let i = 0; i < MAX; i++) {
       const e = pool[i]

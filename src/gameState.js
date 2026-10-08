@@ -58,18 +58,111 @@ export const ENEMY_TYPES = {
   bomber: { name: 'Martelo', hp: 12, radius: 2.8, score: 400, speed: 32, fireEvery: 2.6, boltSpeed: 42 },
 }
 
-// Roteiro da missão. quota = abates necessários para avançar.
-export const WAVES = [
-  { title: 'FASE 1', name: 'Cinturão de Kepler', quota: 10, mix: { fighter: 1 }, spawnEvery: 1.7, maxAlive: 4, asteroidEvery: 0.9 },
-  { title: 'FASE 2', name: 'Linha de Bloqueio', quota: 16, mix: { fighter: 0.6, interceptor: 0.4 }, spawnEvery: 1.3, maxAlive: 6, asteroidEvery: 1.6 },
-  { title: 'FASE 3', name: 'Ofensiva Escarlate', quota: 22, mix: { fighter: 0.45, interceptor: 0.3, bomber: 0.25 }, spawnEvery: 1.05, maxAlive: 8, asteroidEvery: 1.3 },
-  { title: 'FASE FINAL', name: 'Fortaleza Korrath', boss: true, asteroidEvery: Infinity },
+// ---------------------------------------------------------------------------
+// CAMPANHA: missões do Sesc e do Senac Ceará
+// Cada missão tem um prazo (segundos), um indicador principal com meta e um bônus.
+//  - indicator.type 'kills'  → conta naves inimigas derrubadas (pela equipe toda)
+//  - indicator.type 'tokens' → conta "cápsulas de meta" coletadas pelo jogador
+//  - bonus.type: 'accuracy' (precisão mínima), 'minShield' (escudo nunca abaixo de X%),
+//                'combo' (sequência mínima de abates), 'finalShield' (terminar com X% de escudo)
+// Atingimento = realizado / meta. 100% = 1 estrela, 130% = 2 estrelas, bônus = +1 estrela.
+// ---------------------------------------------------------------------------
+export const MISSIONS = [
+  {
+    org: 'SENAC',
+    title: 'Campanha de Matrículas',
+    place: 'Unidades Centro e Aldeota',
+    speaker: 'roberta',
+    briefing:
+      'A Armada do Caos lançou a frota da Evasão contra as nossas turmas. Cada nave derrubada é uma matrícula garantida. Bata a meta antes do prazo!',
+    indicator: { type: 'kills', label: 'matrículas', unit: 'matrícula', meta: 12 },
+    bonus: { type: 'accuracy', value: 35, label: 'Precisão de tiro ≥ 35%' },
+    duration: 55,
+    mix: { fighter: 1 },
+    spawnEvery: 1.5,
+    maxAlive: 5,
+    asteroidEvery: 1.4,
+  },
+  {
+    org: 'SESC',
+    title: 'Saúde & Odontologia',
+    place: 'Rede de clínicas Sesc',
+    speaker: 'ivone',
+    briefing:
+      'As agendas das clínicas estão à deriva no espaço! Recolha as cápsulas de atendimento (anéis verdes) enquanto a frota das Faltas tenta impedir.',
+    indicator: { type: 'tokens', label: 'atendimentos', unit: 'atendimento', meta: 9 },
+    tokenEvery: 3.2,
+    bonus: { type: 'finalShield', value: 50, label: 'Terminar com escudo ≥ 50%' },
+    duration: 55,
+    mix: { fighter: 0.7, interceptor: 0.3 },
+    spawnEvery: 1.6,
+    maxAlive: 5,
+    asteroidEvery: 1.8,
+  },
+  {
+    org: 'SENAC',
+    title: 'Ativo Aula: Turmas Confirmadas',
+    place: 'Toda sexta, sem falta',
+    speaker: 'janiele',
+    briefing:
+      'Os Adiamentos estão cercando as turmas! Derrube as naves para confirmar o início das aulas. Mantenha a sequência para mostrar consistência.',
+    indicator: { type: 'kills', label: 'turmas confirmadas', unit: 'turma confirmada', meta: 16 },
+    bonus: { type: 'combo', value: 8, label: 'Sequência de 8 abates' },
+    duration: 55,
+    mix: { fighter: 0.6, interceptor: 0.4 },
+    spawnEvery: 1.2,
+    maxAlive: 6,
+    asteroidEvery: 1.6,
+  },
+  {
+    org: 'SESC',
+    title: 'Turismo Social & Cultura',
+    place: 'Excursões e palcos do Sesc',
+    speaker: 'ivone',
+    briefing:
+      'Os ônibus do Turismo Social e o público do teatro precisam embarcar! Colete as cápsulas de passageiros e não deixe o escudo cair demais.',
+    indicator: { type: 'tokens', label: 'passageiros embarcados', unit: 'passageiro', meta: 11 },
+    tokenEvery: 2.8,
+    bonus: { type: 'minShield', value: 30, label: 'Escudo nunca abaixo de 30%' },
+    duration: 55,
+    mix: { fighter: 0.5, interceptor: 0.3, bomber: 0.2 },
+    spawnEvery: 1.3,
+    maxAlive: 6,
+    asteroidEvery: 1.5,
+  },
+  {
+    org: 'FECOMÉRCIO',
+    title: 'Ouvidoria em Dia',
+    place: 'Backoffice Sesc/Senac',
+    speaker: 'alan',
+    briefing:
+      'O painel mostra uma onda de manifestações pendentes chegando. Cada nave derrubada é uma resposta enviada no prazo. Os bombardeiros são os casos complexos!',
+    indicator: { type: 'kills', label: 'manifestações respondidas', unit: 'resposta enviada', meta: 20 },
+    bonus: { type: 'accuracy', value: 40, label: 'Precisão de tiro ≥ 40%' },
+    duration: 60,
+    mix: { fighter: 0.45, interceptor: 0.3, bomber: 0.25 },
+    spawnEvery: 1.0,
+    maxAlive: 8,
+    asteroidEvery: 1.3,
+  },
+  {
+    org: 'SESC + SENAC',
+    title: 'Fechamento Anual de Metas',
+    place: 'Fortaleza do Caos Operacional',
+    speaker: 'roberta',
+    briefing:
+      'O Almirante Korrath trouxe a Fortaleza do Caos para impedir o fechamento do ano. Destrua as quatro torres, exponha o núcleo e garanta o resultado de 2026!',
+    indicator: { type: 'boss', label: 'fortaleza destruída', meta: 1 },
+    bonus: { type: 'finalShield', value: 40, label: 'Vencer com escudo ≥ 40%' },
+    boss: true,
+    asteroidEvery: Infinity,
+  },
 ]
 
 const noop = () => {}
 
 export const game = {
-  phase: 'title', // title | playing | paused | dying | gameover | victory
+  phase: 'title', // title | briefing | playing | debrief | paused | dying | gameover | victory
   keys: {}, // teclas pressionadas (KeyW, KeyA, Space...)
   target: new THREE.Vector2(0, 0), // posição X/Y DESEJADA da nave (mouse/WASD escrevem aqui)
   shipPos: new THREE.Vector3(), // posição real da nave
@@ -121,10 +214,11 @@ export function resetGame() {
     comboTimer: 0,
     multiplier: 1,
     kills: 0,
-    waveIndex: 0,
-    waveKills: 0,
-    waveBreak: 3,
-    asteroidEvery: WAVES[0].asteroidEvery,
+    missionIndex: 0,
+    missionTime: 0, // segundos restantes no prazo da missão
+    asteroidEvery: Infinity,
+    mstats: null, // indicadores da missão em andamento
+    report: [], // relatório de cada missão concluída
     bossDefeated: false,
     deathTimer: 0,
     stats: { shots: 0, hits: 0 },
@@ -150,8 +244,9 @@ export const damp = (k, dt) => 1 - Math.exp(-k * dt)
 
 // Delta de tempo do jogo: 0 quando pausado/no menu; aplica câmera lenta (timeScale).
 // O mínimo de 0.0001 evita divisões por zero (delta = 0 no 1º frame).
+const FROZEN = new Set(['paused', 'title', 'briefing', 'debrief'])
 export function frameDt(delta) {
-  if (game.phase === 'paused' || game.phase === 'title') return 0
+  if (FROZEN.has(game.phase)) return 0
   return Math.min(Math.max(delta, 0.0001), 0.05) * game.timeScale
 }
 
@@ -194,6 +289,7 @@ export function damagePlayer(amount, kind = 'laser') {
     return false
   }
   game.shield = Math.max(0, game.shield - amount)
+  if (game.mstats) game.mstats.minShield = Math.min(game.mstats.minShield, game.shield)
   game.invuln = CONFIG.invulnTime
   game.shake = Math.min(1.3, game.shake + amount / 22)
   game.damageFlash = 1
@@ -222,6 +318,7 @@ export function addScore(points, owner = 'player') {
   if (owner === 'player') {
     game.combo++
     game.maxCombo = Math.max(game.maxCombo, game.combo)
+    if (game.mstats) game.mstats.maxCombo = Math.max(game.mstats.maxCombo, game.combo)
     game.comboTimer = CONFIG.comboWindow
     game.multiplier = Math.min(5, 1 + Math.floor(game.combo / 5))
     game.score += Math.round(points * game.multiplier)
@@ -233,3 +330,22 @@ export function addScore(points, owner = 'player') {
 
 // Gancho de depuração (só existe quando o build é feito com VITE_DEBUG=1)
 if (import.meta.env.VITE_DEBUG && typeof window !== 'undefined') window.__fenix = game
+
+// Novo registro de indicadores para a missão que está começando
+export function newMissionStats() {
+  return { kills: 0, tokens: 0, shots: game.stats.shots, hits: game.stats.hits, minShield: game.shield, maxCombo: 0 }
+}
+
+// Avalia a missão: atingimento da meta, bônus e estrelas
+export function evaluateMission(m, s) {
+  const realized = m.indicator.type === 'kills' ? s.kills : m.indicator.type === 'tokens' ? s.tokens : game.bossDefeated ? 1 : 0
+  const pct = Math.round((realized / m.indicator.meta) * 100)
+  const shots = game.stats.shots - s.shots
+  const accuracy = shots ? Math.round(((game.stats.hits - s.hits) / shots) * 100) : 0
+  const b = m.bonus
+  const bonusValue =
+    b.type === 'accuracy' ? accuracy : b.type === 'minShield' ? Math.round(s.minShield) : b.type === 'combo' ? s.maxCombo : Math.round(game.shield)
+  const bonusOk = bonusValue >= b.value
+  const stars = (pct >= 100 ? 1 : 0) + (pct >= 130 ? 1 : 0) + (bonusOk ? 1 : 0)
+  return { org: m.org, title: m.title, label: m.indicator.label, meta: m.indicator.meta, realized, pct, bonusLabel: b.label, bonusValue, bonusOk, stars, accuracy }
+}

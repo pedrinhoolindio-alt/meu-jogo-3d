@@ -1,7 +1,8 @@
 // src/ui/Hud.jsx
 // HUD: lê o estado do jogo a cada quadro e escreve direto no DOM (sem re-render do React).
 import { useEffect, useRef } from 'react'
-import { game, CONFIG, WAVES } from '../gameState'
+import { game, CONFIG } from '../gameState'
+import { missionProgress } from '../Director'
 import { useUI } from '../store'
 
 const WEAPONS = ['LASER DUPLO', 'LASER QUÁDRUPLO', 'PLASMA']
@@ -24,6 +25,7 @@ export default function Hud() {
 
   useEffect(() => {
     let id
+    let lastRealized = -1
     const loop = () => {
       const r = R.current
       if (r.score) {
@@ -41,9 +43,33 @@ export default function Hud() {
         r.weapon.textContent = WEAPONS[game.weaponLevel]
         r.roll.classList.toggle('cooldown', game.rollCooldown > 0)
 
-        const w = WAVES[game.waveIndex]
-        r.wave.textContent = `${w.title} · ${w.name}`
-        r.waveBar.style.transform = `scaleX(${w.boss ? 1 : Math.min(1, game.waveKills / w.quota)})`
+        // ---- Painel da missão: meta, realizado, atingimento e prazo ----
+        const { realized, meta, pct, m } = missionProgress()
+        if (m) {
+          r.wave.textContent = `${m.org} · ${m.title}`
+          if (m.boss) {
+            r.meta.textContent = 'META: destruir a Fortaleza do Caos'
+            r.timer.textContent = ''
+            r.waveBar.style.transform = 'scaleX(1)'
+          } else {
+            r.meta.textContent = `${realized}/${meta} ${m.indicator.label} · ${Math.round(pct * 100)}%`
+            const t = Math.max(0, Math.ceil(game.missionTime))
+            r.timer.textContent = `PRAZO ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`
+            r.timer.classList.toggle('urgent', t <= 15)
+            // A barra vai até 150% da meta; a marca branca indica 100%
+            r.waveBar.style.transform = `scaleX(${Math.min(1, pct / 1.5)})`
+          }
+          r.waveBar.classList.toggle('done', pct >= 1)
+          // "+1 matrícula" flutuando a cada avanço
+          if (realized > lastRealized && lastRealized >= 0 && !m.boss) {
+            const pop = document.createElement('div')
+            pop.className = 'meta-pop'
+            pop.textContent = `+${realized - lastRealized} ${m.indicator.unit}`
+            r.pops.appendChild(pop)
+            setTimeout(() => pop.remove(), 1100)
+          }
+          lastRealized = realized
+        }
 
         const b = game.boss
         const showBoss = !!(b && b.active)
@@ -78,9 +104,15 @@ export default function Hud() {
 
         <div className="hud-top-center">
           <div className="wave" ref={ref('wave')} />
-          <div className="bar thin">
-            <div className="fill wave-fill" ref={ref('waveBar')} />
+          <div className="meta-row">
+            <span className="meta-text" ref={ref('meta')} />
+            <span className="meta-timer" ref={ref('timer')} />
           </div>
+          <div className="bar meta-bar">
+            <div className="fill wave-fill" ref={ref('waveBar')} />
+            <div className="meta-mark" />
+          </div>
+          <div className="meta-pops" ref={ref('pops')} />
           <div className="boss" ref={ref('bossWrap')}>
             <div className="label boss-label">FORTALEZA KORRATH</div>
             <div className="bar boss-bar">
