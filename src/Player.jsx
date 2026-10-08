@@ -36,7 +36,9 @@ export default function Player() {
   )
 
   useFrame((state, delta) => {
-    const dt = Math.min(delta, 0.05) // trava o delta: evita "teleporte" ao voltar de outra aba
+    // Trava o delta: evita "teleporte" ao voltar de outra aba.
+    // O mínimo de 0.0001 evita dividir por zero no 1º frame (delta = 0 → velocidade NaN → nave some)
+    const dt = Math.min(Math.max(delta, 0.0001), 0.05)
     const s = ship.current
     const k = game.keys
 
