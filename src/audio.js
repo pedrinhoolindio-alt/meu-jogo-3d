@@ -442,6 +442,10 @@ export const resolveAudioUrl = (subpath) => {
 }
 
 const INTRO_CANDIDATES = [
+  'audio/Cockpit_Redline.mp3',
+  'Cockpit_Redline.mp3',
+  'audio/cockpit_redline.mp3',
+  'cockpit_redline.mp3',
   'audio/intro.mp3',
   'audio/intro.wav',
   'audio/intro.ogg',
@@ -452,6 +456,10 @@ const INTRO_CANDIDATES = [
 ]
 
 const GAME_CANDIDATES = [
+  'audio/Vector_Override.mp3',
+  'Vector_Override.mp3',
+  'audio/vector_override.mp3',
+  'vector_override.mp3',
   'audio/game.mp3',
   'audio/game.wav',
   'audio/game.ogg',
