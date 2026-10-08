@@ -43,11 +43,12 @@ export const CONFIG = {
 }
 
 // Posição LOCAL (em relação à nave) da ponta dos 4 canhões.
+// Pares: [0,1] = pontas das asas, [2,3] = canhões internos (junto aos motores).
 export const CANNONS = [
-  new THREE.Vector3(2.85, 0.51, -1.1), // superior direito
-  new THREE.Vector3(-2.85, 0.51, -1.1), // superior esquerdo
-  new THREE.Vector3(2.85, -0.51, -1.1), // inferior direito
-  new THREE.Vector3(-2.85, -0.51, -1.1), // inferior esquerdo
+  new THREE.Vector3(2.6, 0.1, -1.4), // asa direita
+  new THREE.Vector3(-2.6, 0.1, -1.4), // asa esquerda
+  new THREE.Vector3(0.9, -0.15, -2.6), // interno direito
+  new THREE.Vector3(-0.9, -0.15, -2.6), // interno esquerdo
 ]
 
 // Tipos de inimigos da Armada Escarlate

@@ -1,6 +1,11 @@
 // src/App.jsx
-import { useEffect } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { Suspense, useEffect, useState } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
+import { useProgress } from '@react-three/drei'
+import * as THREE from 'three'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { resolveAssetBase } from './assets'
+import { preloadShips } from './models'
 import Environment from './Environment'
 import Player from './Player'
 import Wingmen from './Wingmen'
@@ -90,6 +95,37 @@ function useInput() {
   }, [])
 }
 
+// Mapa de ambiente gerado na hora (sem baixar HDRI): dá reflexos realistas no metal das naves
+function SceneEnvironment() {
+  const { gl, scene } = useThree()
+  useEffect(() => {
+    const pmrem = new THREE.PMREMGenerator(gl)
+    const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+    scene.environment = env
+    scene.environmentIntensity = 0.55
+    return () => {
+      scene.environment = null
+      env.dispose()
+      pmrem.dispose()
+    }
+  }, [gl, scene])
+  return null
+}
+
+// Tela de carregamento enquanto os modelos 3D chegam
+function Loading({ ready }) {
+  const { active, progress } = useProgress()
+  if (ready && !active) return null
+  return (
+    <div className="loading">
+      <div className="loading-title">CARREGANDO FROTA</div>
+      <div className="bar thin loading-bar">
+        <div className="fill wave-fill" style={{ transform: `scaleX(${ready ? progress / 100 : 0.05})` }} />
+      </div>
+    </div>
+  )
+}
+
 // Tudo que pertence a uma partida. Trocar a `key` (runId) remonta e zera os pools.
 function World() {
   return (
@@ -112,9 +148,19 @@ export default function App() {
   useInput()
   const runId = useUI((s) => s.runId)
   const phase = useUI((s) => s.phase)
+  const [ready, setReady] = useState(false)
+
+  // Descobre de onde baixar os modelos (pasta local ou GitHub) antes de montar a cena
+  useEffect(() => {
+    resolveAssetBase().then(() => {
+      preloadShips()
+      setReady(true)
+    })
+  }, [])
 
   return (
     <>
+      {ready && (
       <Canvas
         className={phase === 'playing' ? 'playing' : ''}
         camera={{ position: [0, 2.8, 11], fov: 70, near: 0.1, far: 1500 }}
@@ -126,13 +172,18 @@ export default function App() {
 
         <ambientLight intensity={0.35} />
         <hemisphereLight args={['#9fc4ff', '#2a0f1a', 0.6]} />
-        <directionalLight position={[8, 10, 6]} intensity={2.4} color="#fff1dc" />
+        <directionalLight position={[8, 10, 6]} intensity={2.6} color="#fff1dc" />
         <directionalLight position={[-6, -3, -8]} intensity={0.8} color="#4f7dff" />
 
-        <Environment />
-        <World key={runId} />
+        <SceneEnvironment />
+        <Suspense fallback={null}>
+          <Environment />
+          <World key={runId} />
+        </Suspense>
         <Effects />
       </Canvas>
+      )}
+      <Loading ready={ready} />
       <Hud />
       <Radio />
       <Screens />

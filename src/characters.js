@@ -1,117 +1,107 @@
 // src/characters.js
-// Elenco original do jogo e todas as falas do rádio.
-// `look` define o retrato desenhado em SVG (ui/Portrait.jsx).
+// Elenco do jogo e todas as falas do rádio.
+// Os aliados usam fotos (src/embedded/portraits.js); o vilão é uma ilustração (ui/Portrait.jsx).
 
 export const CAST = {
-  vasquez: {
-    name: 'Cmdte. Helena Vasquez',
-    role: 'Ponte do Cruzador Aurora',
+  pedro: {
+    name: 'Pedro',
+    role: 'Fênix Líder · Piloto principal',
+    color: '#ffd84a',
+    photo: 'pedro',
+  },
+  roberta: {
+    name: 'Cmdte. Roberta',
+    role: 'Comandante · Cruzador Aurora',
     color: '#4fb3ff',
-    look: {
-      skin: '#c68863', skinShade: '#a96f4f', hair: 'bun', hairColor: '#4a4a55', cap: '#1f3b66',
-      suit: '#1f3b66', trim: '#e8c25a', eyes: '#3a2a1a', brows: '#2a2a30', headset: true,
-    },
+    photo: 'roberta',
+    holo: true, // aparece como transmissão holográfica da ponte
   },
-  ramos: {
-    name: 'Sgt. Bruno "Bigorna" Ramos',
-    role: 'Fênix 3 · Ala direita',
+  ivone: {
+    name: 'Ivone',
+    role: 'Chefe do Centro de Comando',
     color: '#ffb347',
-    look: {
-      skin: '#8a5636', skinShade: '#6f4128', hair: 'buzz', hairColor: '#1a1410', helmet: '#e9e4da',
-      helmetStripe: '#f57c00', suit: '#5b6236', trim: '#f57c00', eyes: '#2a1a0f', brows: '#1a1410',
-      beard: '#1a1410', scar: true,
-    },
+    photo: 'ivone',
   },
-  faisca: {
-    name: 'Ten. Kaia "Faísca" Mendes',
-    role: 'Fênix 2 · Ala esquerda',
-    color: '#7cf3ff',
-    look: {
-      skin: '#efc39f', skinShade: '#d9a47f', hair: 'bob', hairColor: '#d2452b', suit: '#22427a',
-      trim: '#7cf3ff', eyes: '#2e7d5b', brows: '#a3321d', headset: true, freckles: true,
-    },
+  janiele: {
+    name: 'Janiele',
+    role: 'Chefe da Equipe · Fênix 2',
+    color: '#ff7ad9',
+    photo: 'janiele',
   },
-  brenner: {
-    name: 'Dr. Otto Brenner',
-    role: 'Engenharia · Aurora',
+  alan: {
+    name: 'Alan',
+    role: 'Inteligência & BI',
     color: '#9dff8a',
-    look: {
-      skin: '#f2cfb0', skinShade: '#d9ad8c', hair: 'bald', hairColor: '#e8e8e8', suit: '#cfd6dc',
-      trim: '#5bd16a', eyes: '#3b5a7a', brows: '#e8e8e8', glasses: true, mustache: '#e8e8e8',
-    },
+    photo: 'alan',
   },
   korrath: {
     name: 'Almirante Vex Korrath',
     role: 'Armada Escarlate',
     color: '#ff4d5e',
     hostile: true,
-    look: {
-      skin: '#aab3bb', skinShade: '#8a939b', hair: 'none', hood: '#1a0d12', suit: '#3a0f18',
-      trim: '#ff4d5e', eyes: '#ffcc00', brows: '#2a2a2a', cyberEye: true, scar: true, angry: true,
-    },
   },
 }
 
 const l = (who, text) => ({ who, text })
 
 export const LINES = {
-  briefing: [l('vasquez', 'Esquadrão Fênix, aqui é a Aurora. A Armada Escarlate cruzou o Cinturão de Kepler. Segurem a linha!')],
-  briefing2: [l('faisca', 'Fênix 2 na sua asa esquerda, Líder. Vamos mostrar como se voa!')],
-  wave1: [l('vasquez', 'Primeira linha rompida! Interceptadores chegando pelos flancos — fiquem atentos.')],
-  wave2: [l('vasquez', 'Bombardeiros pesados detectados. Derrubem antes que alcancem a Aurora!')],
-  bossWarning: [l('vasquez', 'Alerta! Assinatura gigante saindo do hiperespaço... é a Fortaleza Korrath!')],
+  briefing: [l('roberta', 'Esquadrão Fênix, aqui é a comandante Roberta. A Armada Escarlate cruzou o Cinturão de Kepler. Pedro, você lidera. Segurem a linha!')],
+  briefing2: [l('janiele', 'Janiele na sua asa esquerda, Pedro. Equipe pronta — vamos mostrar como se voa!')],
+  wave1: [l('ivone', 'Centro de Comando: primeira linha rompida! Interceptadores entrando pelos flancos.')],
+  wave2: [l('ivone', 'Centro de Comando: bombardeiros pesados no radar. Derrubem antes que alcancem a Aurora!')],
+  bossWarning: [l('ivone', 'Alerta máximo! Assinatura gigante saindo do hiperespaço... é a Fortaleza Korrath!')],
   bossTaunt: [l('korrath', 'Pilotos do Fênix... vieram morrer em grande estilo. Fortaleza, abrir fogo!')],
-  bossTip: [l('brenner', 'O núcleo da fortaleza tem escudo. Destruam as quatro torres primeiro!')],
+  bossTip: [l('alan', 'Analisei a fortaleza: o núcleo tem escudo. Derrubem as quatro torres primeiro!')],
 
-  // Elogios do soldado em marcos de pontuação (ordem dos marcos no Director)
+  // Elogios da chefe da equipe em marcos de pontuação (ordem dos marcos no Director)
   praise: [
-    l('ramos', 'Ramos aqui: placar subindo, Líder! Tá voando bonito hoje.'),
-    l('ramos', 'Isso é que é pontaria! A tropa lá na Aurora tá vibrando com você.'),
-    l('ramos', 'Seis mil! Nunca vi ninguém limpar o céu assim desde a Batalha de Órion.'),
-    l('ramos', 'Dez mil pontos, Líder! Vão pintar seu emblema na parede do hangar.'),
-    l('ramos', 'Quinze mil! Os Escarlates já tremem quando veem a sua nave.'),
-    l('ramos', 'Lenda viva! Bigorna bate continência pra você, Líder.'),
+    l('janiele', 'Mil pontos, Pedro! Tá voando bonito hoje.'),
+    l('janiele', 'Isso é que é pontaria! A equipe inteira tá vibrando com você.'),
+    l('alan', 'Atualizei o painel: seis mil pontos. Você está acima de qualquer meta, Pedro!'),
+    l('janiele', 'Dez mil! Vou pedir pra pintarem seu nome na parede do hangar.'),
+    l('roberta', 'Quinze mil pontos. Pedro, a frota inteira está assistindo. Excelente trabalho.'),
+    l('janiele', 'Lenda viva! A Armada Escarlate já treme quando vê a sua nave.'),
   ],
 
   lowShield: [
-    l('faisca', 'Líder, seus escudos estão caindo! Sai da linha de fogo!'),
-    l('brenner', 'Escudo abaixo de 40%! Procure um módulo de reparo azul, rápido!'),
-    l('faisca', 'Tá levando muito tiro! Usa o giro (Q/E) pra rebater os lasers!'),
+    l('ivone', 'Centro de Comando: Pedro, seus escudos estão caindo! Sai da linha de fogo!'),
+    l('alan', 'Escudo abaixo de 40%. Os dados mostram módulos de reparo azuis por perto — pegue um!'),
+    l('janiele', 'Tá levando muito tiro! Usa o giro (Q/E) pra rebater os lasers!'),
   ],
   critical: [
-    l('vasquez', 'Fênix Líder, escudo crítico! Não podemos te perder agora — aguenta firme!'),
-    l('ramos', 'Tô vendo fumaça saindo da sua nave! Desvia, desvia!'),
+    l('roberta', 'Pedro, escudo crítico! Não podemos te perder agora — aguenta firme!'),
+    l('ivone', 'Alerta! Integridade da nave em nível crítico. Recue e se reagrupe!'),
   ],
   combo: [
-    l('faisca', 'Que sequência! Deixa alguns pra mim também!'),
-    l('ramos', 'Combo absurdo! Continua derrubando, Líder!'),
+    l('janiele', 'Que sequência! Deixa alguns pra mim também!'),
+    l('alan', 'Taxa de abates fora da curva! Nunca vi um gráfico desses.'),
   ],
   chatter: [
-    l('faisca', 'Tinha um na minha cola... pronto, despistei.'),
-    l('ramos', 'Bigorna na escuta. Formação mantida.'),
-    l('faisca', 'Tô vendo a frota inimiga no horizonte. É grande...'),
-    l('vasquez', 'Aurora para Fênix: a frota aliada avança logo atrás de vocês.'),
-    l('brenner', 'Lembrete: segure Shift para o turbo, mas o propulsor precisa esfriar!'),
-    l('brenner', 'Bombas de prótons (B ou botão direito) limpam tudo num raio enorme.'),
+    l('janiele', 'Tinha um na minha cola... pronto, despistei.'),
+    l('ivone', 'Centro de Comando monitorando. Formação estável.'),
+    l('roberta', 'Aurora para Fênix: a frota aliada avança logo atrás de vocês.'),
+    l('alan', 'Dica dos dados: segure Shift para o turbo, mas ele precisa recarregar.'),
+    l('alan', 'Bombas de prótons (B ou botão direito) limpam tudo num raio enorme.'),
+    l('janiele', 'Tô vendo a frota inimiga no horizonte. É grande...'),
   ],
   wingKill: [
-    l('faisca', 'Peguei um! Fênix 2 marcando ponto!'),
-    l('ramos', 'Abatido! Bigorna não erra.'),
-    l('faisca', 'Esse era seu, Líder. Foi mal!'),
+    l('janiele', 'Peguei um! Fênix 2 marcando ponto!'),
+    l('janiele', 'Abatido! A equipe não perdoa.'),
+    l('janiele', 'Esse era seu, Pedro. Foi mal!'),
   ],
-  pickup_shield: [l('brenner', 'Reparo instalado. Escudos reforçados!')],
-  pickup_weapon1: [l('brenner', 'Quatro canhões sincronizados! Disparo quádruplo liberado.')],
-  pickup_weapon2: [l('brenner', 'Plasma no máximo! Cuidado pra não derreter os canos.')],
-  pickup_weaponMax: [l('brenner', 'Armas já estão no limite. Converti a energia em pontos!')],
-  pickup_bomb: [l('brenner', 'Bomba de prótons carregada. Aperte B quando precisar.')],
-  deflect: [l('ramos', 'Que giro! Rebateu o laser na raça!')],
-  rollTip: [l('brenner', 'Dica: Q e E fazem um giro evasivo que rebate os lasers inimigos.')],
-  turretDown: [l('faisca', 'Uma torre a menos! Continuem martelando!')],
-  coreExposed: [l('brenner', 'O escudo do núcleo caiu! Mirem no centro vermelho!')],
+  pickup_shield: [l('alan', 'Reparo instalado. Escudos reforçados!')],
+  pickup_weapon1: [l('alan', 'Upgrade recebido: quatro canhões sincronizados!')],
+  pickup_weapon2: [l('alan', 'Plasma no máximo! Seu dano subiu 60%.')],
+  pickup_weaponMax: [l('alan', 'Armas já estão no limite. Converti a energia em pontos!')],
+  pickup_bomb: [l('alan', 'Bomba de prótons carregada. Aperte B quando precisar.')],
+  deflect: [l('janiele', 'Que giro! Rebateu o laser na raça!')],
+  rollTip: [l('alan', 'Dica: Q e E fazem um giro evasivo que rebate os lasers inimigos.')],
+  turretDown: [l('janiele', 'Uma torre a menos! Continuem martelando!')],
+  coreExposed: [l('alan', 'O escudo do núcleo caiu! Mirem no centro vermelho!')],
   bossHalf: [l('korrath', 'Impossível! Escoltas, protejam a fortaleza!')],
   bossDown: [l('korrath', 'Isso... não acabou, Fênix...')],
-  victory: [l('vasquez', 'Fortaleza destruída! Esquadrão Fênix, vocês salvaram a frota. Voltem pra casa.')],
-  playerDown: [l('vasquez', 'Fênix Líder foi atingido! Equipes de resgate, agora!')],
+  victory: [l('roberta', 'Fortaleza destruída! Pedro, você e a equipe salvaram a frota. Voltem pra casa.')],
+  playerDown: [l('roberta', 'Fênix Líder foi atingido! Equipes de resgate, agora!')],
 }
 
 export const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]

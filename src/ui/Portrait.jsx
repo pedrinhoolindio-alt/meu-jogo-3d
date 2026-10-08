@@ -1,129 +1,134 @@
 // src/ui/Portrait.jsx
-// Retrato dos personagens desenhado em SVG (sem imagens externas).
-// A boca anima enquanto o personagem "fala" e os olhos piscam.
+// Retratos: os aliados usam fotos com tratamento de "transmissão" (moldura, varredura, brilho);
+// o vilão é uma ilustração vetorial (SVG) com máscara metálica.
+import { useId } from 'react'
 import { CAST } from '../characters'
+import { photoUrl } from '../assets'
 
-function Hair({ L }) {
-  const c = L.hairColor
-  switch (L.hair) {
-    case 'bun':
-      return <path d="M30 38 Q30 16 50 16 Q70 16 70 38 Q64 24 50 23 Q36 24 30 38Z" fill={c} />
-    case 'buzz':
-      return <path d="M30 36 Q30 15 50 15 Q70 15 70 36 Q66 22 50 21 Q34 22 30 36Z" fill={c} opacity="0.9" />
-    case 'bob':
-      return <path d="M26 54 Q22 13 50 11 Q78 13 74 54 L69 54 Q70 30 61 25 Q52 35 33 30 Q30 40 31 54Z" fill={c} />
-    case 'bald':
-      return (
-        <>
-          <path d="M29.5 46 Q28 33 33 30 L34.5 46Z" fill={c} />
-          <path d="M70.5 46 Q72 33 67 30 L65.5 46Z" fill={c} />
-        </>
-      )
-    default:
-      return null
-  }
+// ---------------------------------------------------------------------------
+// Peças compartilhadas
+// ---------------------------------------------------------------------------
+function Backdrop({ id, accent, kind }) {
+  return (
+    <>
+      <defs>
+        <radialGradient id={`${id}-bg`} cx="30%" cy="85%" r="95%">
+          <stop offset="0%" stopColor={accent} stopOpacity="0.55" />
+          <stop offset="45%" stopColor="#0b1220" />
+          <stop offset="100%" stopColor="#03050b" />
+        </radialGradient>
+      </defs>
+      <rect width="200" height="240" fill={`url(#${id}-bg)`} />
+      {kind === 'cockpit' && (
+        <g opacity="0.5">
+          {/* Moldura da cabine e painel de instrumentos atrás do piloto */}
+          <path d="M0 40 L60 0 M200 40 L140 0" stroke="#2a3446" strokeWidth="6" />
+          <path d="M0 150 L30 130 L30 240 M200 150 L170 130 L170 240" fill="#0d131e" stroke="#1c2535" strokeWidth="2" />
+          {[140, 152, 164, 176].map((y, i) => (
+            <rect key={i} x="6" y={y} width="16" height="5" rx="1" fill={i % 2 ? accent : '#ffb347'} opacity="0.55" />
+          ))}
+          {[146, 160, 174].map((y, i) => (
+            <circle key={i} cx="186" cy={y} r="3" fill={i === 1 ? '#ff4d5e' : accent} opacity="0.7" />
+          ))}
+        </g>
+      )}
+      {kind === 'bridge' && (
+        <g opacity="0.45">
+          {/* Janela panorâmica da ponte com estrelas */}
+          <path d="M0 20 L200 20 L200 120 L0 120Z" fill="#071226" />
+          {[...Array(26)].map((_, i) => (
+            <circle key={i} cx={(i * 53) % 200} cy={24 + ((i * 37) % 92)} r={i % 5 === 0 ? 1.1 : 0.6} fill="#cfe6ff" />
+          ))}
+          <path d="M0 20 L200 20 M66 20 L66 120 M134 20 L134 120 M0 120 L200 120" stroke="#25344d" strokeWidth="4" />
+        </g>
+      )}
+      {kind === 'lab' && (
+        <g opacity="0.45">
+          <path d="M14 0 L14 240 M30 0 L30 240" stroke="#2b3a2f" strokeWidth="7" />
+          <path d="M160 30 L200 30 M160 60 L200 60" stroke="#2b3a2f" strokeWidth="5" />
+          {[44, 90, 136].map((y) => (
+            <rect key={y} x="168" y={y} width="22" height="10" rx="2" fill="#7dff8a" opacity="0.35" />
+          ))}
+        </g>
+      )}
+      {kind === 'enemy' && (
+        <g opacity="0.55">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <path key={i} d={`M${i * 50 - 10} 0 L${i * 50 + 20} 0 L${i * 50 - 20} 240 L${i * 50 - 50} 240Z`} fill="#2a0508" />
+          ))}
+          <rect x="0" y="0" width="200" height="6" fill="#ff2a3a" opacity="0.6" />
+        </g>
+      )}
+    </>
+  )
+}
+
+// Vilão: máscara metálica angular com três fendas vermelhas
+function Korrath({ id }) {
+  return (
+    <>
+      <Backdrop id={id} accent="#ff2a3a" kind="enemy" />
+      <defs>
+        <linearGradient id={`${id}-chrome`} x1="0.2" y1="0" x2="0.8" y2="1">
+          <stop offset="0%" stopColor="#f2f4f8" />
+          <stop offset="30%" stopColor="#8b939f" />
+          <stop offset="55%" stopColor="#2a2f37" />
+          <stop offset="75%" stopColor="#a7aeb9" />
+          <stop offset="100%" stopColor="#1a1d22" />
+        </linearGradient>
+        <linearGradient id={`${id}-hood`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3a0a12" />
+          <stop offset="100%" stopColor="#0d0205" />
+        </linearGradient>
+        <radialGradient id={`${id}-eye`} cx="50%" cy="50%" r="60%">
+          <stop offset="0%" stopColor="#fff2c0" />
+          <stop offset="35%" stopColor="#ff3a2a" />
+          <stop offset="100%" stopColor="#5a0006" />
+        </radialGradient>
+      </defs>
+      {/* Capa e armadura de gola com espinhos */}
+      <path d="M0 240 L0 190 C30 170 60 166 100 166 C140 166 170 170 200 190 L200 240Z" fill="#1d0508" />
+      <path d="M40 240 L52 182 L76 196 L100 176 L124 196 L148 182 L160 240Z" fill={`url(#${id}-chrome)`} opacity="0.85" />
+      <path d="M52 182 L44 160 L64 186 M148 182 L156 160 L136 186" fill="#8b939f" />
+      <circle cx="100" cy="214" r="9" fill="#2a0508" stroke="#ff2a3a" strokeWidth="2" />
+      <path d="M100 207 L104 214 L100 221 L96 214Z" fill="#ff3a2a" className="lens" />
+      {/* Capuz */}
+      <path d="M34 190 C26 120 44 40 100 28 C156 40 174 120 166 190 C150 176 128 170 100 170 C72 170 50 176 34 190Z" fill={`url(#${id}-hood)`} />
+      <path d="M50 170 C48 110 66 58 100 46 C134 58 152 110 150 170" stroke="#000" strokeOpacity="0.55" strokeWidth="6" fill="none" />
+      {/* Máscara */}
+      <path d="M66 76 L100 58 L134 76 L138 118 L122 152 L100 162 L78 152 L62 118 Z" fill={`url(#${id}-chrome)`} />
+      <path d="M100 58 L100 162" stroke="#000" strokeOpacity="0.35" strokeWidth="1.5" />
+      <path d="M66 76 L100 92 L134 76 M62 118 L100 128 L138 118" stroke="#000" strokeOpacity="0.3" strokeWidth="1.2" fill="none" />
+      {/* Três fendas oculares */}
+      <path d="M72 100 L94 106 L92 112 L74 108Z" fill={`url(#${id}-eye)`} className="lens" />
+      <path d="M128 100 L106 106 L108 112 L126 108Z" fill={`url(#${id}-eye)`} className="lens" />
+      <path d="M97 78 L103 78 L102 92 L98 92Z" fill={`url(#${id}-eye)`} className="lens" />
+      {/* Grade de respiração */}
+      {[134, 140, 146].map((y) => (
+        <path key={y} d={`M86 ${y} L114 ${y}`} stroke="#0d0f12" strokeWidth="3" strokeLinecap="round" />
+      ))}
+      <path d="M62 118 C60 98 62 86 66 76" stroke="#ff4d5e" strokeOpacity="0.6" strokeWidth="2" fill="none" />
+    </>
+  )
 }
 
 export default function Portrait({ who, talking }) {
+  const raw = useId()
   const c = CAST[who]
-  const L = c.look
-  const id = `pt-${who}`
-  const browY = L.angry ? 2 : 0
-
+  if (c.photo) {
+    return (
+      <div className={`portrait photo-portrait ${c.holo ? 'holo' : ''} ${talking ? 'talking' : ''}`} style={{ '--accent': c.color }}>
+        <img src={photoUrl(c.photo)} alt={c.name} draggable={false} />
+        <div className="pp-tint" />
+        <div className="pp-scan" />
+        <div className="pp-corners" />
+      </div>
+    )
+  }
+  const id = 'p' + raw.replace(/[^a-zA-Z0-9]/g, '') + who
   return (
-    <svg viewBox="0 0 100 100" className={`portrait ${talking ? 'talking' : ''}`} aria-label={c.name}>
-      <defs>
-        <radialGradient id={`${id}-bg`} cx="50%" cy="38%" r="75%">
-          <stop offset="0%" stopColor={c.color} stopOpacity="0.6" />
-          <stop offset="100%" stopColor="#04060d" />
-        </radialGradient>
-      </defs>
-      <rect width="100" height="100" fill={`url(#${id}-bg)`} />
-
-      {/* Coque / capuz atrás da cabeça */}
-      {L.hair === 'bun' && <circle cx="50" cy="17" r="8" fill={L.hairColor} />}
-      {L.hood && <path d="M14 100 L19 42 Q50 -2 81 42 L86 100Z" fill={L.hood} />}
-
-      {/* Uniforme */}
-      <path d="M6 100 Q10 73 50 70 Q90 73 94 100Z" fill={L.suit} />
-      <path d="M37 71 L50 86 L63 71" fill="none" stroke={L.trim} strokeWidth="2.5" />
-      <rect x="66" y="82" width="12" height="5" rx="1" fill={L.trim} opacity="0.85" />
-
-      {/* Pescoço, orelhas e rosto */}
-      <path d="M42 58 L42 73 Q50 77 58 73 L58 58Z" fill={L.skinShade} />
-      <ellipse cx="29.5" cy="45" rx="3.2" ry="5" fill={L.skinShade} />
-      <ellipse cx="70.5" cy="45" rx="3.2" ry="5" fill={L.skinShade} />
-      <path d="M30 40 Q30 18 50 18 Q70 18 70 40 Q70 58 58 64 Q50 68 42 64 Q30 58 30 40Z" fill={L.skin} />
-
-      {L.beard && <path d="M32 48 Q34 64 50 67 Q66 64 68 48 Q62 60 50 61 Q38 60 32 48Z" fill={L.beard} opacity="0.5" />}
-      {L.freckles &&
-        [36, 39, 61, 64].map((x, i) => <circle key={i} cx={x} cy={50 + (i % 2)} r="0.7" fill="#b86a4a" opacity="0.7" />)}
-
-      <Hair L={L} />
-
-      {/* Quepe de oficial */}
-      {L.cap && (
-        <>
-          <path d="M26 31 Q29 8 50 8 Q71 8 74 31Z" fill={L.cap} />
-          <rect x="25" y="27.5" width="50" height="5" rx="2" fill="#0d1526" />
-          <circle cx="50" cy="19" r="3.4" fill={L.trim} />
-        </>
-      )}
-      {/* Capacete de piloto com viseira levantada */}
-      {L.helmet && (
-        <>
-          <path d="M24 48 Q23 7 50 7 Q77 7 76 48 L70.5 48 Q70.5 21 50 20 Q29.5 21 29.5 48Z" fill={L.helmet} />
-          <path d="M49 7.2 L51 7.2 L51 20 L49 20Z" fill={L.helmetStripe} />
-          <path d="M30 23 Q50 11 70 23 L68 28 Q50 18 32 28Z" fill="#1b2a3a" opacity="0.92" />
-        </>
-      )}
-      {/* Fone de comunicação */}
-      {L.headset && (
-        <>
-          <path d="M28 44 Q27 13 50 12 Q73 13 72 44" fill="none" stroke="#1d1f24" strokeWidth="2.4" />
-          <rect x="25" y="40" width="6" height="10" rx="2" fill="#2a2d33" />
-          <path d="M28 49 Q32 60 43 61" fill="none" stroke="#1d1f24" strokeWidth="1.8" />
-          <circle cx="44" cy="61" r="1.8" fill="#3a3d44" />
-        </>
-      )}
-
-      {/* Sobrancelhas */}
-      <path d={`M36 ${36 + browY} L46 ${37 - browY}`} stroke={L.brows} strokeWidth="2" strokeLinecap="round" />
-      <path d={`M54 ${37 - browY} L64 ${36 + browY}`} stroke={L.brows} strokeWidth="2" strokeLinecap="round" />
-
-      {/* Olhos (piscam via CSS) */}
-      <g className="eyes">
-        <ellipse cx="41" cy="43" rx="3.1" ry="2.3" fill="#f4f1ea" />
-        <circle cx="41.4" cy="43.2" r="1.6" fill={L.eyes} />
-        {!L.cyberEye && (
-          <>
-            <ellipse cx="59" cy="43" rx="3.1" ry="2.3" fill="#f4f1ea" />
-            <circle cx="58.6" cy="43.2" r="1.6" fill={L.eyes} />
-          </>
-        )}
-      </g>
-      {L.cyberEye && (
-        <>
-          <path d="M53 37 L66 37 L67 49 L53 49Z" fill="#3b3f47" />
-          <circle cx="59.5" cy="43" r="3" fill="#ff2a3a" className="cyber" />
-        </>
-      )}
-      {L.glasses && (
-        <g fill="none" stroke="#d9dde3" strokeWidth="1.2">
-          <circle cx="41" cy="43" r="5" />
-          <circle cx="59" cy="43" r="5" />
-          <path d="M46 43 L54 43" />
-        </g>
-      )}
-      {L.scar && <path d="M35 47 L40 56" stroke="#7a3a32" strokeWidth="1.3" opacity="0.8" />}
-
-      {/* Nariz */}
-      <path d="M50 44 L47.5 52 Q50 53.5 52.5 52" fill="none" stroke={L.skinShade} strokeWidth="1.4" />
-      {L.mustache && <path d="M42 56 Q46 52.5 50 54.5 Q54 52.5 58 56 Q54 55 50 56 Q46 55 42 56Z" fill={L.mustache} />}
-
-      {/* Boca: fechada + aberta (alterna enquanto fala) */}
-      <path d={L.angry ? 'M44 58.5 Q50 56.5 56 58.5' : 'M44 57.5 Q50 60 56 57.5'} stroke="#5a2a22" strokeWidth="1.6" fill="none" />
-      <ellipse className="mouth-open" cx="50" cy="58.3" rx="3.8" ry="2.4" fill="#3a1414" />
+    <svg viewBox="0 0 200 240" preserveAspectRatio="xMidYMid slice" className={`portrait p-${who} ${talking ? 'talking' : ''}`}>
+      <Korrath id={id} />
     </svg>
   )
 }

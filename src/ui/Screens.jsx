@@ -30,11 +30,11 @@ function Title() {
         <div className="logo-sub">OPERAÇÃO AURORA</div>
       </div>
       <p className="story">
-        A Armada Escarlate do Almirante Korrath invadiu o Cinturão de Kepler. Você é o Fênix Líder — rompa as linhas inimigas e
+        A Armada Escarlate do Almirante Korrath invadiu o Cinturão de Kepler. Pedro, você é o Fênix Líder — rompa as linhas inimigas e
         destrua a Fortaleza Korrath antes que ela alcance o cruzador Aurora.
       </p>
       <div className="crew">
-        {['vasquez', 'faisca', 'ramos', 'brenner'].map((id) => (
+        {['pedro', 'roberta', 'ivone', 'janiele', 'alan'].map((id) => (
           <div className="crew-card" key={id} style={{ '--accent': CAST[id].color }}>
             <Portrait who={id} />
             <div className="crew-name">{CAST[id].name}</div>
@@ -71,10 +71,10 @@ function Result({ kind }) {
   const best = useUI((s) => s.best)
   if (!result) return null
   const win = kind === 'victory'
-  const speaker = win ? 'vasquez' : 'ramos'
+  const speaker = win ? 'roberta' : 'janiele'
   const quote = win
-    ? 'Missão cumprida, Fênix Líder. A frota inteira deve a vida a você.'
-    : 'A gente te tira daí, Líder. Respira fundo e volta pro cockpit — a Aurora precisa de você.'
+    ? 'Missão cumprida, Pedro. A frota inteira deve a vida a você e à sua equipe.'
+    : 'A gente te tira daí, Pedro. Respira fundo e volta pro cockpit — a equipe precisa de você.'
   return (
     <div className={`screen result-screen ${win ? 'win' : 'lose'}`} onMouseDown={stop}>
       <h1>{win ? 'VITÓRIA!' : 'NAVE ABATIDA'}</h1>

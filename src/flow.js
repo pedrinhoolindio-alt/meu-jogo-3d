@@ -2,7 +2,7 @@
 // Fluxo de telas: iniciar, pausar, terminar e voltar ao menu.
 import { game, resetGame, WAVES } from './gameState'
 import { ui, saveBest } from './store'
-import { initAudio, startMusic, setMusicIntensity } from './audio'
+import { initAudio, startMusic, setMusicIntensity, setEngine } from './audio'
 import { clearRadio } from './radio'
 
 export function startGame() {
@@ -22,11 +22,13 @@ export function startGame() {
 
 export function togglePause() {
   if (game.phase === 'playing') {
+    setEngine(false, false)
     game.phase = 'paused'
     game.wantsToFire = false
     ui.set({ phase: 'paused' })
   } else if (game.phase === 'paused') {
     game.phase = 'playing'
+    setEngine(true, false)
     ui.set({ phase: 'playing' })
   }
 }

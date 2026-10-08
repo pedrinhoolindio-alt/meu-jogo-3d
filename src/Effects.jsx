@@ -10,7 +10,7 @@ export default function Effects() {
   // O efeito guarda a referência deste Vector2: basta alterá-lo a cada frame
   const offset = useMemo(() => new THREE.Vector2(0.0004, 0.0004), [])
   useFrame(() => {
-    const k = 0.0004 + game.damageFlash * 0.006 + (game.boosting ? 0.0016 : 0)
+    const k = 0.0003 + game.damageFlash * 0.0022 + (game.boosting ? 0.0009 : 0)
     offset.set(k, k * 0.6)
   })
   return (

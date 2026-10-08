@@ -1,17 +1,18 @@
 // src/Wingmen.jsx
-// Alas do Esquadrão Fênix: Faísca (esquerda) e Bigorna (direita).
+// Alas do Esquadrão Fênix: Janiele (esquerda) e Fênix 3 (direita).
 // Voam em formação com o jogador e atiram sozinhos nos inimigos.
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { game, damp, rand } from './gameState'
-import { PlayerShip } from './models'
+import { Ship } from './models'
 import { sfx } from './audio'
 
 const { lerp, clamp } = THREE.MathUtils
+// Janiele (chefe da equipe, Fênix 2) à esquerda e Fênix 3 à direita
 const ALLIES = [
-  { id: 'faisca', side: -1, stripe: '#1e88e5' },
-  { id: 'ramos', side: 1, stripe: '#f57c00' },
+  { id: 'janiele', side: -1 },
+  { id: 'wing3', side: 1 },
 ]
 const target = new THREE.Vector3()
 const prev = new THREE.Vector3()
@@ -78,7 +79,7 @@ export default function Wingmen() {
         return
       }
       for (const sx of [-1, 1]) {
-        origin.set(w.pos.x + sx * 2.1, w.pos.y, w.pos.z - 1)
+        origin.set(w.pos.x + sx * 2.1, w.pos.y, w.pos.z - 1.5)
         dir.subVectors(tgt, origin).normalize()
         dir.x += rand(-0.02, 0.02)
         dir.y += rand(-0.02, 0.02)
@@ -92,8 +93,8 @@ export default function Wingmen() {
   return (
     <>
       {ALLIES.map((a, i) => (
-        <group key={a.id} ref={(el) => (refs.current[i] = el)} scale={0.78}>
-          <PlayerShip stripe={a.stripe} />
+        <group key={a.id} ref={(el) => (refs.current[i] = el)}>
+          <Ship kind={a.id} scale={0.44} flipped />
         </group>
       ))}
     </>

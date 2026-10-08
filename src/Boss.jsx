@@ -5,19 +5,20 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { game, frameDt, rand, damp, segmentSphere, addScore } from './gameState'
-import { M } from './models'
+import { M, Ship } from './models'
 import { sfx } from './audio'
 
+// Posições relativas ao centro da fortaleza (medidas sobre o modelo 3D escalado 4,2×)
 const TURRET_OFFSETS = [
-  [-9, 3.4, 3.8],
-  [9, 3.4, 3.8],
-  [-9, -3.4, 3.8],
-  [9, -3.4, 3.8],
+  [-12.5, 1.5, 6.2],
+  [12.5, 1.5, 6.2],
+  [-7.5, -9, 6.2],
+  [7.5, -9, 6.2],
 ].map((a) => new THREE.Vector3(...a))
-const CORE_OFFSET = new THREE.Vector3(0, 0, 4.4)
+const CORE_OFFSET = new THREE.Vector3(0, 0, 4.6)
 const TURRET_HP = 28
 const CORE_HP = 150
-const HOLD = new THREE.Vector3(0, 1, -66) // posição de combate (mais perto = chefe maior na tela)
+const HOLD = new THREE.Vector3(0, 2, -75) // posição de combate (mais perto = chefe maior na tela)
 
 const world = new THREE.Vector3()
 const dir = new THREE.Vector3()
@@ -145,7 +146,7 @@ export default function Boss() {
     } else if (boss.state === 'fight') {
       const t = boss.t
       // Movimento em "oito": x = sen(0,35t)·9, y = sen(0,6t)·3
-      boss.pos.set(Math.sin(t * 0.35) * 9, Math.sin(t * 0.6) * 3 + 1, HOLD.z + Math.sin(t * 0.4) * 5)
+      boss.pos.set(Math.sin(t * 0.35) * 8, Math.sin(t * 0.6) * 3 + HOLD.y, HOLD.z + Math.sin(t * 0.4) * 5)
       const turretsUp = anyTurret()
 
       // ---- Ataques ----
@@ -189,8 +190,8 @@ export default function Boss() {
       if (boss.escortT <= 0) {
         const alive = game.enemies.reduce((n, e) => n + (e.active ? 1 : 0), 0)
         if (alive < 4) {
-          game.spawnEnemy('fighter', { x: boss.pos.x - 14, y: boss.pos.y, z: boss.pos.z - 10 })
-          game.spawnEnemy('fighter', { x: boss.pos.x + 14, y: boss.pos.y, z: boss.pos.z - 10 })
+          game.spawnEnemy('fighter', { x: boss.pos.x - 22, y: boss.pos.y, z: boss.pos.z - 10 })
+          game.spawnEnemy('fighter', { x: boss.pos.x + 22, y: boss.pos.y, z: boss.pos.z - 10 })
         }
         boss.escortT = turretsUp ? 11 : 8
       }
@@ -226,7 +227,7 @@ export default function Boss() {
           continue
         }
         // Casco (caixa aproximada): bloqueia o tiro
-        if (Math.abs(l.pos.x - boss.pos.x) < 13 && Math.abs(l.pos.y - boss.pos.y) < 6 && Math.abs(l.pos.z - boss.pos.z) < 4) {
+        if (Math.abs(l.pos.x - boss.pos.x) < 19 && Math.abs(l.pos.y - boss.pos.y) < 14 && Math.abs(l.pos.z - boss.pos.z) < 5.5) {
           l.active = false
           game.fx.sparks(l.pos, 'orange', 3)
         }
@@ -240,7 +241,7 @@ export default function Boss() {
       boss.boomT -= dt
       if (boss.boomT <= 0) {
         boss.boomT = 0.12
-        world.set(boss.pos.x + rand(-13, 13), boss.pos.y + rand(-5, 5), boss.pos.z + rand(-2, 5))
+        world.set(boss.pos.x + rand(-18, 18), boss.pos.y + rand(-13, 13), boss.pos.z + rand(0, 6))
         game.fx.explode(world, { size: rand(1, 2.2) })
         sfx.explosion(false)
         game.shake = Math.max(game.shake, 0.5)
@@ -274,49 +275,14 @@ export default function Boss() {
     <group ref={group} visible={false}>
       <pointLight position={[0, 0, 9]} color="#ff5040" intensity={60} distance={40} decay={1.5} />
 
-      {/* Casco: prisma hexagonal deitado (eixo do cilindro girado de Y para Z) */}
-      <mesh rotation={[Math.PI / 2, 0, Math.PI / 6]} material={M.eHull}>
-        <cylinderGeometry args={[10, 12.5, 7, 6]} />
-      </mesh>
-      <mesh position={[0, 0, 3.6]} material={M.eArmor}>
-        <torusGeometry args={[5, 0.9, 8, 6]} />
-      </mesh>
-      {/* Asas laterais com espinhos */}
-      {[-1, 1].map((s) => (
-        <group key={s}>
-          <mesh position={[s * 16, 0, -1]} rotation={[0, 0, s * 0.22]} material={M.eArmor}>
-            <boxGeometry args={[10, 1.4, 5]} />
-          </mesh>
-          <mesh position={[s * 21, s * 1.1, 1.5]} rotation={[Math.PI / 2, 0, 0]} material={M.eHull}>
-            <coneGeometry args={[0.8, 5, 6]} />
-          </mesh>
-          {[0, 1, 2, 3].map((k) => (
-            <mesh key={k} position={[s * (12.5 + k * 2), s * (0.55 + k * 0.45), 1.55]} material={M.eGlow}>
-              <boxGeometry args={[0.8, 0.15, 0.1]} />
-            </mesh>
-          ))}
-        </group>
-      ))}
-      {/* Torre de comando */}
-      <mesh position={[0, 9.5, -1]} material={M.eArmor}>
-        <boxGeometry args={[4, 4, 4]} />
-      </mesh>
-      <mesh position={[0, 12.5, -1]} material={M.eHull}>
-        <cylinderGeometry args={[0.1, 0.1, 3, 4]} />
-      </mesh>
-      <mesh position={[0, 9.8, 1.05]} material={M.eGlow}>
-        <boxGeometry args={[3, 0.3, 0.1]} />
-      </mesh>
-      {/* Faixas de luz na frente */}
-      {[-6.2, 6.2].map((y) => (
-        <mesh key={y} position={[0, y, 3.6]} material={M.eGlow}>
-          <boxGeometry args={[7, 0.25, 0.2]} />
-        </mesh>
-      ))}
-      {/* Motores traseiros */}
-      {[-6, 0, 6].map((x) => (
-        <mesh key={x} position={[x, 0, -3.6]} rotation={[0, Math.PI, 0]} material={M.eEngine}>
-          <circleGeometry args={[2, 16]} />
+      {/* Casco: disco de batalha (modelo 3D) visto de frente — o topo do modelo encara o jogador */}
+      <group rotation={[Math.PI / 2, 0, 0]}>
+        <Ship kind="boss" scale={4.2} engines={false} />
+      </group>
+      {/* Luzes de alerta no casco */}
+      {[-16, 16].map((x) => (
+        <mesh key={x} position={[x, 9, 4.2]} material={M.eGlow}>
+          <sphereGeometry args={[0.45, 10, 8]} />
         </mesh>
       ))}
 

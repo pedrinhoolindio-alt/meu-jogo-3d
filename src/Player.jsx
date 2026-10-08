@@ -3,8 +3,8 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { game, BOUNDS, CONFIG, damp } from './gameState'
-import { PlayerShip, M } from './models'
-import { sfx } from './audio'
+import { Ship, M } from './models'
+import { sfx, setEngine } from './audio'
 
 const { lerp, clamp } = THREE.MathUtils
 
@@ -14,6 +14,7 @@ const camBase = new THREE.Vector3(0, 2.8, 11) // posição suavizada da câmera 
 const lookTarget = new THREE.Vector3()
 const smoothLook = new THREE.Vector3(0, 0, -20)
 const prevPos = new THREE.Vector3()
+let lastEngine = -1
 
 // Curva "ease in-out": começa e termina devagar (usada no giro evasivo)
 const easeInOut = (p) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2)
@@ -149,8 +150,15 @@ export default function Player() {
     cam.lookAt(smoothLook)
 
     // ---------------- Motores ----------------
-    M.engine.emissiveIntensity = (game.boosting ? 6 : 2.5) + Math.random() * 1.5
-    const len = (game.boosting ? 2.8 : 0.9) * (0.8 + Math.random() * 0.4)
+    // Som do motor: só atualiza quando o estado muda (ligado / turbo)
+    const engState = (playing ? 1 : 0) + (game.boosting ? 2 : 0)
+    if (engState !== lastEngine) {
+      lastEngine = engState
+      setEngine(playing, game.boosting)
+    }
+    // Chamas tremulam; no turbo ficam bem mais longas (unidades do modelo)
+    M.flame.opacity = game.boosting ? 0.8 : 0.55
+    const len = (game.boosting ? 3.8 : 1.4) * (0.85 + Math.random() * 0.3)
     for (const f of flames.current) if (f) f.scale.y = len
   })
 
@@ -158,7 +166,7 @@ export default function Player() {
     <>
       <group ref={ship}>
         <group ref={roller}>
-          <PlayerShip stripe="#c62828" flames={flames} />
+          <Ship kind="player" scale={0.55} flipped flames={flames} />
         </group>
       </group>
 

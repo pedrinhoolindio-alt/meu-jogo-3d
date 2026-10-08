@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber'
 import { Stars } from '@react-three/drei'
 import * as THREE from 'three'
 import { game, CONFIG, rand } from './gameState'
+import { Ship, M } from './models'
 
 const dummy = new THREE.Object3D()
 const Z_AXIS = new THREE.Vector3(0, 0, 1)
@@ -138,13 +139,13 @@ function Planet() {
     planet.current.rotation.y += envDt(delta) * 0.01
   })
   return (
-    <group position={[-470, -250, -760]}>
+    <group position={[-330, -300, -820]}>
       <mesh ref={planet} rotation={[0.2, 0, 0.25]}>
-        <sphereGeometry args={[200, 64, 32]} />
+        <sphereGeometry args={[130, 64, 32]} />
         <meshStandardMaterial map={tex} roughness={1} metalness={0} fog={false} />
       </mesh>
       <mesh scale={1.05}>
-        <sphereGeometry args={[200, 64, 32]} />
+        <sphereGeometry args={[130, 64, 32]} />
         <shaderMaterial
           vertexShader={atmoVertex}
           fragmentShader={atmoFragment}
@@ -155,78 +156,33 @@ function Planet() {
         />
       </mesh>
       {/* Lua */}
-      <mesh position={[560, 420, 40]}>
-        <sphereGeometry args={[22, 32, 16]} />
-        <meshStandardMaterial color="#8d93a1" roughness={1} fog={false} />
+      <mesh position={[760, 470, 60]}>
+        <sphereGeometry args={[18, 32, 16]} />
+        <meshStandardMaterial color="#5d6371" roughness={1} fog={false} />
       </mesh>
     </group>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Naves capitais ao fundo: cruzador aliado Aurora e encouraçado inimigo
+// Naves capitais ao fundo: cruzador aliado Aurora e encouraçado inimigo (modelos 3D)
 // ---------------------------------------------------------------------------
-const hullMat = new THREE.MeshStandardMaterial({ color: '#a7b0bd', metalness: 0.5, roughness: 0.6, fog: false })
-const enemyHullMat = new THREE.MeshStandardMaterial({ color: '#2b2d35', metalness: 0.6, roughness: 0.5, fog: false })
-const winAlly = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 2, 2.6), toneMapped: false, fog: false })
-const winEnemy = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.4, 0.3), toneMapped: false, fog: false })
-const engAlly = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.8, 2, 4), toneMapped: false, fog: false, side: THREE.DoubleSide })
-
-function CapitalShip({ hull, windows, engines, accent }) {
-  return (
-    <group>
-      <mesh material={hull}>
-        <boxGeometry args={[120, 12, 22]} />
-      </mesh>
-      {/* Proa em cunha (cilindro de 4 lados com topo zero = pirâmide) */}
-      <mesh position={[78, 0, 0]} rotation={[0, 0, -Math.PI / 2]} material={hull}>
-        <cylinderGeometry args={[0, 13, 36, 4]} />
-      </mesh>
-      <mesh position={[20, 12, 0]} material={hull}>
-        <boxGeometry args={[18, 14, 12]} />
-      </mesh>
-      <mesh position={[-20, -9, 0]} material={hull}>
-        <boxGeometry args={[60, 6, 16]} />
-      </mesh>
-      {accent}
-      {Array.from({ length: 22 }, (_, i) => (
-        <mesh key={i} position={[-52 + i * 5, (i % 3) * 2.6 - 2.6, 11.05]} material={windows}>
-          <boxGeometry args={[2.2, 0.6, 0.1]} />
-        </mesh>
-      ))}
-      {[-3, 3].map((z) => (
-        <mesh key={z} position={[-60.2, 0, z]} rotation={[0, -Math.PI / 2, 0]} material={engines}>
-          <circleGeometry args={[4.5, 16]} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
 function CapitalShips() {
   const ally = useRef()
   const enemy = useRef()
   useFrame((state) => {
     const t = state.clock.elapsedTime
-    ally.current.position.set(230 + Math.sin(t * 0.05) * 20, 60 + Math.sin(t * 0.1) * 4, -520)
-    enemy.current.position.set(-240 - Math.sin(t * 0.04) * 25, 130, -650)
+    ally.current.position.set(210 + Math.sin(t * 0.05) * 15, 55 + Math.sin(t * 0.1) * 4, -430)
+    enemy.current.position.set(-230 - Math.sin(t * 0.04) * 20, 120, -560)
   })
   return (
     <>
-      <group ref={ally} rotation={[0.1, -0.5, 0.05]}>
-        <CapitalShip hull={hullMat} windows={winAlly} engines={engAlly} />
+      {/* Aurora: navega de lado, mostrando o perfil */}
+      <group ref={ally} rotation={[0.08, -1.25, 0.05]}>
+        <Ship kind="allyCruiser" scale={7} glowColor="#7fb2ff" fog={false} />
       </group>
-      <group ref={enemy} rotation={[-0.1, Math.PI + 0.6, 0]} scale={1.3}>
-        <CapitalShip
-          hull={enemyHullMat}
-          windows={winEnemy}
-          engines={winEnemy}
-          accent={[-30, 0, 30].map((x) => (
-            <mesh key={x} position={[x, 9, 0]} rotation={[0, 0, 0.3]} material={enemyHullMat}>
-              <coneGeometry args={[2.5, 14, 4]} />
-            </mesh>
-          ))}
-        />
+      <group ref={enemy} rotation={[-0.05, 1.9, 0]}>
+        <Ship kind="enemyCruiser" scale={9} flameMat={M.enemyFlame} glowColor="#ff6040" fog={false} />
       </group>
     </>
   )

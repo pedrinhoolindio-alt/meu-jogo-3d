@@ -30,12 +30,18 @@ export default function Radio() {
     <div key={msg.id} className={`radio ${c.hostile ? 'hostile' : ''}`} style={{ '--accent': c.color }}>
       <div className="radio-portrait">
         <Portrait who={msg.who} talking={typing} />
-        <div className="scanlines" />
+        
       </div>
       <div className="radio-body">
         <div className="radio-head">
           <span className="radio-dot" />
           <span className="radio-name">{c.name}</span>
+          {/* Onda de voz: barras animadas enquanto o personagem fala */}
+          <span className={`voice ${typing ? 'on' : ''}`}>
+            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+              <i key={i} style={{ animationDelay: `${i * 0.07}s` }} />
+            ))}
+          </span>
         </div>
         <div className="radio-role">{c.role}</div>
         <div className="radio-text">
