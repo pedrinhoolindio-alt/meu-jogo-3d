@@ -24,7 +24,7 @@ import Screens from './ui/Screens'
 import { game, BOUNDS } from './gameState'
 import { ui, useUI } from './store'
 import { startGame, togglePause } from './flow'
-import { toggleMute } from './audio'
+import { toggleMute, handleUploadedAudioFiles } from './audio'
 
 // ---------------------------------------------------------------------------
 // Entrada (mouse + teclado) → escreve no estado global `game`
@@ -194,6 +194,48 @@ export default function App() {
   const runId = useUI((s) => s.runId)
   const phase = useUI((s) => s.phase)
   const [ready, setReady] = useState(false)
+  const [isDraggingAudio, setIsDraggingAudio] = useState(false)
+  const [dragFeedback, setDragFeedback] = useState('')
+
+  useEffect(() => {
+    const onDragOver = (e) => {
+      e.preventDefault()
+      setIsDraggingAudio(true)
+    }
+    const onDragLeave = (e) => {
+      if (
+        e.clientX <= 0 ||
+        e.clientY <= 0 ||
+        e.clientX >= window.innerWidth ||
+        e.clientY >= window.innerHeight
+      ) {
+        setIsDraggingAudio(false)
+      }
+    }
+    const onDrop = async (e) => {
+      e.preventDefault()
+      setIsDraggingAudio(false)
+      if (e.dataTransfer?.files?.length) {
+        const res = await handleUploadedAudioFiles(e.dataTransfer.files)
+        if (res.success) {
+          setDragFeedback(
+            res.count === 2
+              ? `✔ Músicas ativadas! Intro: "${res.intro}" | Jogo: "${res.game}"`
+              : `✔ Música da Intro ativada: "${res.intro}"!`
+          )
+          setTimeout(() => setDragFeedback(''), 7000)
+        }
+      }
+    }
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('dragleave', onDragLeave)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('dragleave', onDragLeave)
+      window.removeEventListener('drop', onDrop)
+    }
+  }, [])
 
   // Descobre de onde baixar os modelos (pasta local ou GitHub) antes de montar a cena
   useEffect(() => {
@@ -232,6 +274,18 @@ export default function App() {
       <Hud />
       <Radio />
       <Screens />
+
+      {/* Overlay de arrastar e soltar músicas */}
+      {isDraggingAudio && (
+        <div className="drag-audio-overlay">
+          <div className="drag-audio-card">
+            <div className="drag-icon">📥</div>
+            <h2>SOLTE SUAS MÚSICAS AQUI</h2>
+            <p>O jogo detecta automaticamente a Intro e a Música de Combate!</p>
+          </div>
+        </div>
+      )}
+      {dragFeedback && <div className="audio-toast floating">{dragFeedback}</div>}
     </>
   )
 }

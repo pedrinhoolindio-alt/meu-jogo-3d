@@ -5,6 +5,7 @@ import { useUI } from '../store'
 import { startGame, togglePause, toMenu, startMission, nextMission } from '../flow'
 import { MISSIONS } from '../gameState'
 import { CAST } from '../characters'
+import { playIntro } from '../audio'
 import Portrait from './Portrait'
 
 const stop = (e) => e.stopPropagation()
@@ -44,6 +45,25 @@ const OrgTag = ({ org }) => (
 
 function Title() {
   const best = useUI((s) => s.best)
+
+  useEffect(() => {
+    playIntro()
+    const onUserGesture = () => {
+      playIntro()
+      window.removeEventListener('click', onUserGesture)
+      window.removeEventListener('keydown', onUserGesture)
+      window.removeEventListener('touchstart', onUserGesture)
+    }
+    window.addEventListener('click', onUserGesture)
+    window.addEventListener('keydown', onUserGesture)
+    window.addEventListener('touchstart', onUserGesture)
+    return () => {
+      window.removeEventListener('click', onUserGesture)
+      window.removeEventListener('keydown', onUserGesture)
+      window.removeEventListener('touchstart', onUserGesture)
+    }
+  }, [])
+
   return (
     <div className="screen title-screen" onMouseDown={stop}>
       <div className="logo">
@@ -64,7 +84,7 @@ function Title() {
           </div>
         ))}
       </div>
-      <button className="btn primary" onClick={startGame}>
+      <button id="botao-start" className="btn primary" onClick={startGame}>
         INICIAR CAMPANHA
       </button>
       {best > 0 && <div className="best">RECORDE: {best.toLocaleString('pt-BR')}</div>}

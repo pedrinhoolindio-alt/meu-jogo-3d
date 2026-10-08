@@ -2,11 +2,31 @@
 // Fluxo da campanha: título → briefing → missão → relatório da missão → ... → relatório anual.
 import { game, resetGame, MISSIONS, CONFIG, newMissionStats, evaluateMission } from './gameState'
 import { ui, saveBest } from './store'
-import { initAudio, startMusic, setMusicIntensity, setEngine } from './audio'
+import {
+  initAudio,
+  startMusic,
+  setMusicIntensity,
+  setEngine,
+  musicaIntro,
+  musicaJogo,
+  fadeOut,
+  playIntro,
+} from './audio'
 import { clearRadio, sayLine } from './radio'
 
 export function startGame() {
   initAudio()
+  // Inicia o fade out na música da intro ao longo de 2 segundos (2000ms)
+  fadeOut(musicaIntro, 2000)
+
+  // A música do jogo começa imediatamente, criando um efeito legal onde
+  // a intro vai sumindo enquanto a ação vai começando
+  if (musicaJogo) {
+    try {
+      musicaJogo.play()?.catch(() => {})
+    } catch (e) {}
+  }
+
   startMusic()
   setMusicIntensity(1)
   resetGame()
@@ -79,10 +99,20 @@ export function togglePause() {
     setEngine(false, false)
     game.phase = 'paused'
     game.wantsToFire = false
+    if (musicaJogo) {
+      try {
+        musicaJogo.pause()
+      } catch (e) {}
+    }
     ui.set({ phase: 'paused' })
   } else if (game.phase === 'paused') {
     game.phase = 'playing'
     setEngine(true, false)
+    if (musicaJogo) {
+      try {
+        musicaJogo.play()?.catch(() => {})
+      } catch (e) {}
+    }
     ui.set({ phase: 'playing' })
   }
 }
@@ -123,5 +153,12 @@ export function endRun(kind) {
 export function toMenu() {
   resetGame()
   clearRadio()
+  if (musicaJogo) {
+    try {
+      musicaJogo.pause()
+      musicaJogo.currentTime = 0
+    } catch (e) {}
+  }
+  playIntro()
   ui.set({ phase: 'title', banner: null, runId: ui.get().runId + 1 })
 }
