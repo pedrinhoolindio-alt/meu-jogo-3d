@@ -1,98 +1,145 @@
 // src/Enemies.jsx
-// Naves da Armada do Caos:
-//  Vespa (caça) · Lança (mergulho) · Martelo (bombardeiro) · Agulha (kamikaze que persegue)
-//  Ômega (canhoneira com rajada em leque) · Colmeia (porta-naves que lança Agulhas)
-//  Ferrão (atirador: mira com laser vermelho e dispara um tiro forte)
-import { useEffect, useMemo, useRef } from 'react'
+// Caças e naves médias da Armada do Caos em VOO LIVRE 3D: atacam de qualquer direção.
+// Comportamentos (ENEMY_TYPES.ai):
+//  dogfight · passa atirando, arremete para longe e volta (Vespa, Lança, Espectro, Raptor)
+//  strafe   · passadas laterais atirando de lado (Corsário)
+//  standoff · mantém distância circulando e atira como torre (Ômega, Martelo, Ferrão, Arraia...)
+//  hunt     · persegue e colide (Agulha, Enxame)
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { game, BOUNDS, ENEMY_TYPES, ENEMY_LIST, frameDt, rand, damp, segmentSphere, hitsShip, damagePlayer, addScore } from './gameState'
-import { FighterModel, InterceptorModel, BomberModel, KamikazeModel, GunshipModel, CarrierModel, SniperModel } from './models'
+import { game, ENEMY_TYPES, frameDt, rand, damp, segmentSphere, hitsShip, damagePlayer, addScore } from './gameState'
+import { EnemyModel } from './models'
 import { sfx } from './audio'
 
-const MAX = 22
-const MODELS = {
-  fighter: FighterModel,
-  interceptor: InterceptorModel,
-  bomber: BomberModel,
-  kamikaze: KamikazeModel,
-  gunship: GunshipModel,
-  carrier: CarrierModel,
-  sniper: SniperModel,
-}
+const MAX = 30
 const { lerp, clamp } = THREE.MathUtils
 const tmp = new THREE.Vector3()
+const tmp2 = new THREE.Vector3()
 const aim = new THREE.Vector3()
-const steer = new THREE.Vector3()
+const toShip = new THREE.Vector3()
+const desired = new THREE.Vector3()
+const side = new THREE.Vector3()
+const prevDir = new THREE.Vector3()
+const muzzle = new THREE.Vector3()
 const UP = new THREE.Vector3(0, 1, 0)
-const CHARGE_TIME = 1.1 // segundos de aviso do Ferrão antes do disparo
+const CHARGE_TIME = 1.1 // segundos de aviso do Ferrão/Arpão antes do disparo
+
+// Gira o vetor unitário `dir` em direção a `want` no máximo `maxAngle` radianos.
+// Ângulo entre eles = acos(dir·want). Se for maior que o permitido, anda só a fração maxAngle/ângulo.
+function turnToward(dir, want, maxAngle) {
+  const cos = clamp(dir.dot(want), -1, 1)
+  const ang = Math.acos(cos)
+  if (ang < 1e-4) return
+  if (ang <= maxAngle) dir.copy(want)
+  else {
+    // Perto de 180°, o lerp passaria pelo zero: empurra para um lado antes
+    if (cos < -0.98) dir.add(tmp2.set(0.2, 0.1, 0)).normalize()
+    dir.lerp(want, maxAngle / ang).normalize()
+  }
+}
+
+// Ponto previsto da nave do jogador para um projétil com velocidade `speed`:
+//   previsto = posição + velocidade · (distância / speed)
+function leadPoint(from, speed, out, factor = 1) {
+  const t = speed > 0 ? from.distanceTo(game.shipPos) / speed : 0
+  return out.copy(game.shipPos).addScaledVector(game.shipVel, t * factor)
+}
+
+// Ponto de nascimento aleatório em volta do jogador (inclusive atrás e dos lados)
+export function spawnAround(out, minD = 240, maxD = 360) {
+  const a = rand(0, Math.PI * 2)
+  const el = rand(-0.4, 0.4)
+  out.set(Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el)).multiplyScalar(rand(minD, maxD)).add(game.shipPos)
+  if (game.stage === 'surface') out.y = clamp(out.y, game.ground + 70, game.ground + 650)
+  return out
+}
+
+// Um "slot" do pool: o modelo 3D só é montado para o tipo que está usando o slot agora
+function Slot({ index, bind }) {
+  const [type, setType] = useState(null)
+  const group = useRef()
+  const beam = useRef()
+  useEffect(() => bind(index, { setType, group, beam, type }), [bind, index, type])
+  const T = type && ENEMY_TYPES[type]
+  return (
+    <>
+      <group ref={group} visible={false}>
+        {T && <EnemyModel kind={T.model} scale={T.scale} />}
+      </group>
+      <mesh ref={beam} visible={false}>
+        <cylinderGeometry args={[0.05, 0.05, 1, 6]} />
+        <meshBasicMaterial color={[4, 0.3, 0.3]} toneMapped={false} transparent opacity={0.85} />
+      </mesh>
+    </>
+  )
+}
 
 export default function Enemies() {
-  const groups = useRef([])
-  const models = useRef([]) // models[i][j] = grupo do modelo j do slot i
-  const beams = useRef([]) // linha de mira do Ferrão (uma por slot)
+  const slots = useRef([])
+  const bind = useMemo(
+    () => (i, s) => {
+      slots.current[i] = s
+    },
+    []
+  )
 
   const pool = useMemo(
     () =>
-      Array.from({ length: MAX }, () => ({
-        active: false,
-        type: 'fighter',
-        pos: new THREE.Vector3(),
-        prevX: 0,
-        prevY: 0,
-        vel: new THREE.Vector3(),
-        anchor: new THREE.Vector2(), // centro do "vai-e-vem" lateral
-        lock: new THREE.Vector3(), // ponto travado pelo Ferrão
-        hp: 1,
-        state: 'approach',
-        t: 0,
-        holdZ: -50,
-        holdTime: 5,
-        fireT: 1,
-        charge: 0,
-        seed: Math.random() * 10,
-        bank: 0,
-      })),
+      Array.from({ length: MAX }, () => {
+        const e = {
+          active: false,
+          type: 'fighter',
+          pos: new THREE.Vector3(),
+          vel: new THREE.Vector3(), // velocidade (direção × rapidez) — usada na previsão de tiro
+          dir: new THREE.Vector3(0, 0, 1), // direção do nariz (unitária)
+          evade: new THREE.Vector3(),
+          lock: new THREE.Vector3(), // ponto travado pelo Ferrão/Arpão
+          hp: 1,
+          state: 'attack',
+          t: 0,
+          stateT: 0,
+          fireT: 1,
+          charge: 0,
+          orbitSide: 1,
+          seed: Math.random() * 10,
+          bank: 0,
+        }
+        // Objeto de alvo (mira automática, mísseis, alas, radar) — reaproveitado
+        e.target = { pos: e.pos, vel: e.vel, r: 2, kind: 'enemy', ref: e, alive: true, hit: (d, o) => damage(e, d, o) }
+        return e
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   )
 
   function spawn(type, opts = {}) {
-    const e = pool.find((p) => !p.active)
-    if (!e) return null
+    const i = pool.findIndex((p) => !p.active)
+    if (i < 0) return null
+    const e = pool[i]
     const T = ENEMY_TYPES[type]
     e.active = true
     e.type = type
     e.hp = T.hp
     e.t = 0
+    e.stateT = 0
     e.bank = 0
     e.charge = 0
     e.seed = Math.random() * 10
-    e.fireT = rand(0.8, Math.min(T.fireEvery, 4) + 0.8)
-
-    if (type === 'interceptor') {
-      // Mergulha de um dos flancos em direção à nave
-      const side = Math.random() < 0.5 ? -1 : 1
-      e.pos.set(side * rand(30, 45), rand(-8, 8), rand(-170, -130))
-      tmp.set(game.shipPos.x * 0.5 + rand(-5, 5), game.shipPos.y * 0.5 + rand(-3, 3), 12)
-      // velocidade = (alvo - posição) normalizado * rapidez
-      e.vel.subVectors(tmp, e.pos).normalize().multiplyScalar(T.speed)
-      e.state = 'dive'
-    } else if (type === 'kamikaze') {
-      // Nasce no ponto indicado (ex.: saindo da Colmeia) ou ao longe, e persegue a nave
-      e.pos.set(opts.x ?? rand(-1, 1) * BOUNDS.x * 2.2, opts.y ?? rand(-1, 1) * BOUNDS.y * 2, opts.z ?? rand(-200, -170))
-      e.vel.set(rand(-8, 8), rand(-4, 4), T.speed * 0.5)
-      e.state = 'hunt'
-    } else {
-      e.pos.set(opts.x ?? rand(-1, 1) * BOUNDS.x * 1.6, opts.y ?? rand(-1, 1) * BOUNDS.y * 1.4, opts.z ?? -230)
-      e.anchor.set(e.pos.x, e.pos.y)
-      const hold = { bomber: [-88, -72, 9, 12], carrier: [-105, -90, 14, 18], sniper: [-82, -66, 9, 12], gunship: [-70, -52, 7, 10] }[type]
-      e.holdZ = hold ? rand(hold[0], hold[1]) : rand(-62, -38)
-      e.holdTime = hold ? rand(hold[2], hold[3]) : rand(4, 7)
-      e.state = 'approach'
-    }
-    e.prevX = e.pos.x
-    e.prevY = e.pos.y
-    // Primeira aparição de um tipo novo: o Alan avisa no rádio
+    e.orbitSide = Math.random() < 0.5 ? -1 : 1
+    e.fireT = rand(1.2, Math.min(T.fireEvery, 4) + 1.2)
+    e.target.r = T.radius
+    if (opts.pos) e.pos.copy(opts.pos)
+    else spawnAround(e.pos)
+    // Nasce apontando para o jogador (ou na direção pedida, ex.: saindo do hangar da nave-mãe)
+    if (opts.dir) e.dir.copy(opts.dir).normalize()
+    else e.dir.subVectors(game.shipPos, e.pos).normalize()
+    e.vel.copy(e.dir).multiplyScalar(T.speed)
+    e.state = T.ai === 'hunt' ? 'hunt' : 'attack'
+    // Monta o modelo certo neste slot (se mudou de tipo)
+    const s = slots.current[i]
+    if (s && s.type !== type) s.setType(type)
+    // Primeira aparição de um tipo novo: a equipe avisa no rádio
     if (!game.seenEnemies[type]) {
       game.seenEnemies[type] = true
       game.events.push({ type: 'newEnemy', enemy: type })
@@ -103,12 +150,15 @@ export default function Enemies() {
   function kill(e, owner) {
     const T = ENEMY_TYPES[e.type]
     e.active = false
-    const big = e.type === 'bomber' || e.type === 'carrier' || e.type === 'gunship'
-    game.fx.explode(e.pos, { size: e.type === 'carrier' ? 2.6 : big ? 2 : 1.2 })
+    const big = T.hp >= 9
+    game.fx.explode(e.pos, { size: T.radius > 3.5 ? 2.6 : big ? 2 : 1.2 })
     if (big) game.fx.shockwave(e.pos, 1.5)
     sfx.explosion(big)
     game.kills++
-    if (game.mstats) game.mstats.kills++ // conta para a meta da missão (toda a equipe)
+    if (game.mstats) {
+      game.mstats.kills++ // conta para a meta da missão (toda a equipe)
+      if (game.stage === 'orbit') game.mstats.orbitKills++
+    }
     game.events.push({ type: 'kill' })
     if (owner === 'player' || owner === 'drone') addScore(T.score, 'player')
     else if (owner === 'wing') {
@@ -117,9 +167,9 @@ export default function Enemies() {
     }
     // Chance de soltar um power-up (naves grandes quase sempre soltam)
     const r = Math.random()
-    if (owner !== 'ram' && (big ? r < 0.8 : r < 0.1)) {
+    if (owner !== 'ram' && (big ? r < 0.75 : r < 0.12)) {
       const roll = Math.random()
-      const kind = roll < 0.32 ? 'shield' : roll < 0.6 ? 'weapon' : roll < 0.76 ? 'missile' : roll < 0.9 ? 'bomb' : 'drone'
+      const kind = roll < 0.32 ? 'shield' : roll < 0.58 ? 'weapon' : roll < 0.76 ? 'missile' : roll < 0.9 ? 'bomb' : 'drone'
       game.spawnPickup(kind, e.pos)
     }
   }
@@ -133,40 +183,67 @@ export default function Enemies() {
     if (e.hp <= 0) kill(e, owner)
   }
 
+  // ---------------- Armas ----------------
   function fire(e) {
     const T = ENEMY_TYPES[e.type]
-    tmp.copy(e.pos)
-    tmp.z += 1.8
-    if (e.type === 'bomber') {
-      // Leque de 3 bolas de plasma
-      for (let k = -1; k <= 1; k++) {
-        aim.subVectors(game.shipPos, tmp).normalize()
-        aim.x += k * 0.12
-        game.fireEnemyLaser(tmp, aim, T.boltSpeed, 'plasma')
+    muzzle.copy(e.pos).addScaledVector(e.dir, T.radius + 0.6)
+    side.crossVectors(e.dir, UP).normalize() // direita da nave inimiga
+    switch (T.weapon) {
+      case 'single':
+      case 'twin':
+      case 'triple': {
+        // Mira no ponto PREVISTO com um erro aleatório (senão seria impossível desviar)
+        leadPoint(muzzle, T.boltSpeed, aim, 0.85)
+        aim.x += rand(-2.5, 2.5)
+        aim.y += rand(-1.5, 1.5)
+        aim.z += rand(-2.5, 2.5)
+        const n = T.weapon === 'single' ? 1 : T.weapon === 'twin' ? 2 : 3
+        for (let k = 0; k < n; k++) {
+          const off = n === 1 ? 0 : (k / (n - 1) - 0.5) * 2 * 1.2 // canhões espalhados na asa
+          tmp.copy(muzzle).addScaledVector(side, off)
+          desired.subVectors(aim, tmp)
+          game.fireEnemyLaser(tmp, desired, T.boltSpeed, 'bolt')
+        }
+        break
       }
-    } else if (e.type === 'gunship') {
-      // Rajada de 5 lasers em leque horizontal
-      for (let k = -2; k <= 2; k++) {
-        aim.subVectors(game.shipPos, tmp).normalize()
-        aim.x += k * 0.09
-        aim.y += rand(-0.02, 0.02)
-        game.fireEnemyLaser(tmp, aim, T.boltSpeed, 'bolt')
+      case 'fan3':
+      case 'fan5': {
+        // Leque: espalha os tiros girando a direção em torno do "cima" da nave inimiga
+        const n = T.weapon === 'fan3' ? 3 : 5
+        leadPoint(muzzle, T.boltSpeed, aim, 0.7)
+        desired.subVectors(aim, muzzle).normalize()
+        for (let k = 0; k < n; k++) {
+          const a = (k - (n - 1) / 2) * (n === 3 ? 0.12 : 0.09)
+          tmp.copy(desired).applyAxisAngle(UP, a)
+          game.fireEnemyLaser(muzzle, tmp, T.boltSpeed, n === 3 ? 'plasma' : 'bolt')
+        }
+        break
       }
-    } else if (e.type === 'carrier') {
-      // Lança duas Agulhas pelas laterais
-      for (const side of [-1, 1]) game.spawnEnemy('kamikaze', { x: e.pos.x + side * 4, y: e.pos.y - 1, z: e.pos.z + 3 })
-      game.fx.sparks(e.pos, 'orange', 10)
-    } else if (e.type === 'sniper') {
-      // Começa a carregar: trava a mira um pouco à frente de onde a nave está
-      e.charge = CHARGE_TIME
-      e.lock.copy(game.shipPos)
-      sfx.charge()
-    } else {
-      // Mira na nave com um pouco de erro aleatório (senão seria impossível desviar)
-      aim.subVectors(game.shipPos, tmp)
-      aim.x += rand(-0.8, 0.8)
-      aim.y += rand(-0.5, 0.5)
-      game.fireEnemyLaser(tmp, aim, T.boltSpeed, 'bolt')
+      case 'seeker': {
+        // Plasma teleguiado: sai pelas laterais e persegue o jogador
+        for (const s of [-1, 1]) {
+          tmp.copy(e.pos).addScaledVector(side, s * T.radius)
+          desired.copy(side).multiplyScalar(s).addScaledVector(e.dir, 0.6)
+          game.fireEnemyLaser(tmp, desired, T.boltSpeed, 'seeker')
+        }
+        break
+      }
+      case 'charge':
+        // Começa a carregar: trava a mira onde a nave vai estar
+        e.charge = CHARGE_TIME
+        leadPoint(e.pos, T.boltSpeed, e.lock, 0.6)
+        sfx.charge()
+        break
+      case 'launch':
+        // Lança duas naves menores pelas laterais
+        for (const s of [-1, 1]) {
+          tmp.copy(e.pos).addScaledVector(side, s * 5)
+          desired.copy(side).multiplyScalar(s).add(e.dir)
+          spawn(T.spawns, { pos: tmp, dir: desired })
+        }
+        game.fx.sparks(e.pos, 'orange', 10)
+        break
+      default:
     }
   }
 
@@ -180,82 +257,110 @@ export default function Enemies() {
   useFrame((_, delta) => {
     const dt = frameDt(delta)
     if (!dt) return
-    const playing = game.phase === 'playing'
+    const playing = game.phase === 'playing' && game.stage !== 'entry'
     // Os inimigos ficam mais agressivos a cada missão
-    const aggression = 1 - Math.min(game.missionIndex, 4) * 0.06
+    const aggression = 1 - Math.min(game.missionIndex, 5) * 0.05
+    const surface = game.stage === 'surface'
 
     for (let i = 0; i < MAX; i++) {
       const e = pool[i]
-      const g = groups.current[i]
-      const beam = beams.current[i]
+      const s = slots.current[i]
+      if (!s) continue
+      const g = s.group.current
+      const beam = s.beam.current
       if (!e.active) {
-        g.visible = false
-        beam.visible = false
+        if (g) g.visible = false
+        if (beam) beam.visible = false
         continue
       }
       const T = ENEMY_TYPES[e.type]
       e.t += dt
-      e.prevX = e.pos.x
-      e.prevY = e.pos.y
-      const sp = T.speed * game.worldMul
+      e.stateT += dt
+      prevDir.copy(e.dir)
+      toShip.subVectors(game.shipPos, e.pos)
+      const dist = toShip.length()
+      toShip.divideScalar(dist || 1)
+      let speed = T.speed
 
-      // ---------------- Comportamento (máquina de estados) ----------------
-      if (e.state === 'approach') {
-        // Vem do fundo em +Z até a distância de combate (holdZ)
-        e.pos.z += sp * 1.3 * dt
-        if (e.pos.z >= e.holdZ) {
-          e.state = 'strafe'
-          e.t = 0
+      // ================ Comportamento (máquina de estados) ================
+      if (e.state === 'hunt') {
+        // Perseguição pura no ponto previsto; acelera quando está perto
+        leadPoint(e.pos, T.speed * 1.5, desired, 0.5).sub(e.pos).normalize()
+        speed = T.speed * (dist < 80 ? 1.35 : 1)
+      } else if (T.ai === 'standoff') {
+        // Fica a uma distância "range" do jogador, circulando:
+        //   tangente = toShip × UP (perpendicular) · lado ;  + correção radial (dist − range)/range
+        side.crossVectors(toShip, UP).normalize().multiplyScalar(e.orbitSide)
+        const radial = clamp((dist - T.range) / T.range, -1, 1)
+        desired.copy(side).addScaledVector(toShip, radial * 1.6).normalize()
+        desired.y += Math.sin(e.t * 0.5 + e.seed) * 0.15
+        desired.normalize()
+      } else if (e.state === 'attack') {
+        // Mergulha no ponto previsto da nave (um pouco ao lado no Corsário)
+        leadPoint(e.pos, T.speed + 40, desired, 0.6)
+        if (T.ai === 'strafe') {
+          side.crossVectors(toShip, UP).normalize()
+          desired.addScaledVector(side, 28 * e.orbitSide)
         }
-      } else if (e.state === 'strafe') {
-        // Vai-e-vem lateral: x = âncora + sen(t)·amplitude (lerp suaviza a transição)
-        const k = damp(2, dt)
-        const amp = e.type === 'carrier' ? 4 : e.type === 'sniper' ? 3 : 6
-        e.pos.x = lerp(e.pos.x, e.anchor.x + Math.sin(e.t * 0.9 + e.seed) * amp, k)
-        e.pos.y = lerp(e.pos.y, e.anchor.y + Math.sin(e.t * 1.3 + e.seed) * amp * 0.5, k)
-        e.pos.z = lerp(e.pos.z, e.holdZ + Math.sin(e.t * 0.7 + e.seed) * 5, k)
-        if (e.t > e.holdTime && e.charge <= 0) e.state = 'exit'
-      } else if (e.state === 'exit') {
-        // Passa pela nave e vai embora para o lado
-        e.pos.z += sp * 1.4 * dt
-        e.pos.x += Math.sign(e.pos.x || 1) * 14 * dt
-        e.pos.y += 6 * dt
-      } else if (e.state === 'dive') {
-        // Trajetória reta + zigue-zague
-        e.pos.addScaledVector(e.vel, dt * game.worldMul)
-        e.pos.x += Math.sin(e.t * 4 + e.seed) * 6 * dt
-      } else if (e.state === 'hunt') {
-        // Perseguição: a velocidade vira gradualmente na direção da nave (curva limitada)
-        //   desejado = (nave - posição) normalizado × rapidez
-        if (e.pos.z < game.shipPos.z - 6) {
-          steer.subVectors(game.shipPos, e.pos).normalize().multiplyScalar(sp)
-          e.vel.lerp(steer, Math.min(1, 1.6 * dt))
+        desired.sub(e.pos).normalize()
+        // Chegou perto demais: arremete para longe e depois volta
+        if (dist < (T.ai === 'strafe' ? 45 : 38) || (e.stateT > 9 && dist < 120)) {
+          e.state = 'break'
+          e.stateT = 0
+          e.evade.copy(e.dir).add(tmp.set(rand(-1, 1), rand(-0.6, 0.6), rand(-1, 1))).normalize()
         }
-        e.pos.addScaledVector(e.vel, dt)
+      } else if (e.state === 'break') {
+        desired.copy(e.evade)
+        speed = T.speed * 1.15
+        if (e.stateT > rand(1.8, 2.6) || dist > 260) {
+          e.state = 'attack'
+          e.stateT = 0
+        }
       }
 
-      // ---------------- Tiro ----------------
+      // Na atmosfera: evita o chão e não sobe demais
+      if (surface) {
+        const alt = e.pos.y - game.ground
+        if (alt < 50) desired.y = Math.max(desired.y, (50 - alt) / 30)
+        if (alt > 750) desired.y = Math.min(desired.y, -0.4)
+        desired.normalize()
+      }
+      // Muito longe: volta para a briga
+      if (dist > 420) desired.copy(toShip)
+
+      // Gira o nariz com a curva máxima do tipo e anda para a frente
+      turnToward(e.dir, desired, T.turn * dt * (e.state === 'hunt' ? 1.2 : 1))
+      e.vel.copy(e.dir).multiplyScalar(speed)
+      e.pos.addScaledVector(e.vel, dt)
+      if (surface) e.pos.y = Math.max(e.pos.y, game.ground + 12)
+
+      // ================ Tiro ================
       e.fireT -= dt
-      if (playing && e.fireT <= 0 && e.pos.z > -130 && e.pos.z < -12 && e.state !== 'exit' && Number.isFinite(T.fireEvery)) {
-        fire(e)
-        e.fireT = T.fireEvery * aggression * rand(0.8, 1.3)
+      if (playing && e.fireT <= 0 && Number.isFinite(T.fireEvery) && e.charge <= 0) {
+        // Caças só atiram com o nariz apontado para o jogador (cone de ~22°);
+        // naves de "torre" (standoff) atiram de qualquer ângulo dentro do alcance.
+        const facing = e.dir.dot(toShip)
+        const canFire = T.ai === 'standoff' ? dist < T.range * 2.2 : facing > 0.93 && dist < 300
+        if (canFire) {
+          fire(e)
+          e.fireT = T.fireEvery * aggression * rand(0.8, 1.3)
+        }
       }
 
-      // Ferrão carregando: linha de mira vermelha até disparar
+      // Ferrão/Arpão carregando: linha de mira vermelha até disparar
       if (e.charge > 0) {
         e.charge -= dt
         if (e.charge <= 0) {
-          tmp.copy(e.pos)
-          tmp.z += 2
-          aim.subVectors(e.lock, tmp)
+          muzzle.copy(e.pos).addScaledVector(e.dir, 2)
+          aim.subVectors(e.lock, muzzle)
           if (playing) {
-            game.fireEnemyLaser(tmp, aim, T.boltSpeed, 'heavy')
+            game.fireEnemyLaser(muzzle, aim, T.boltSpeed, 'heavy')
             sfx.beam()
           }
         }
       }
 
-      // ---------------- Colisões ----------------
+      // ================ Colisões ================
       for (const l of game.playerLasers) {
         if (!l.active || l.lastHit === e) continue
         if (segmentSphere(l.prev, l.pos, e.pos, T.radius)) {
@@ -271,42 +376,39 @@ export default function Enemies() {
         }
       }
       if (e.active && playing && hitsShip(e.pos, T.radius * 0.6)) {
-        damagePlayer(e.type === 'kamikaze' ? 22 : 25, 'ram')
+        damagePlayer(T.ai === 'hunt' ? 22 : 25, 'ram')
         kill(e, 'ram')
       }
-      if (e.active && (e.pos.z > 25 || Math.abs(e.pos.x) > 90)) e.active = false
+      // Longe demais do jogador (saiu da batalha): recicla
+      if (e.active && dist > 1100) e.active = false
       if (!e.active) {
-        g.visible = false
-        beam.visible = false
+        if (g) g.visible = false
+        if (beam) beam.visible = false
         continue
       }
 
-      // ---------------- Visual ----------------
+      // ================ Visual ================
+      if (!g) continue
       g.visible = true
       g.position.copy(e.pos)
-      const ms = models.current[i]
-      for (let j = 0; j < ENEMY_LIST.length; j++) ms[j].visible = ENEMY_LIST[j] === e.type
-      // Inclina na direção do movimento lateral
-      const vx = (e.pos.x - e.prevX) / dt
-      e.bank = lerp(e.bank, clamp(-vx * 0.05, -0.8, 0.8), damp(5, dt))
-      if (e.state === 'dive' || e.state === 'hunt') {
-        // lookAt aponta o +Z do grupo para onde a nave vai; o Lança ainda gira em espiral
-        tmp.copy(e.pos).add(e.vel)
-        g.lookAt(tmp)
-        if (e.state === 'dive') g.rotateZ(e.t * 3)
-      } else {
-        g.rotation.set(e.state === 'exit' ? -0.4 : 0, 0, e.bank)
-      }
+      // lookAt aponta o +Z do grupo (nariz do modelo) para onde a nave vai
+      g.lookAt(tmp.copy(e.pos).add(e.dir))
+      // Inclinação na curva: quanto o nariz virou para a direita neste frame
+      //   (prevDir × dir)·UP > 0 = curva à esquerda
+      const turnRate = tmp.crossVectors(prevDir, e.dir).dot(UP) / dt
+      e.bank = lerp(e.bank, clamp(-turnRate * 1.4, -1.1, 1.1), damp(4, dt))
+      g.rotateZ(e.bank)
+      if (e.state === 'hunt') g.rotateZ(e.t * 2.5) // Agulhas giram em espiral
 
-      // Linha de mira: cilindro fino do Ferrão até o ponto travado, piscando cada vez mais rápido
-      if (e.charge > 0) {
+      // Linha de mira: cilindro fino do inimigo até o ponto travado, piscando cada vez mais rápido
+      if (e.charge > 0 && beam) {
         tmp.subVectors(e.lock, e.pos)
         const len = tmp.length()
         beam.visible = Math.sin(e.charge * (40 - e.charge * 25)) > -0.3
         beam.position.copy(e.pos).addScaledVector(tmp, 0.5)
         beam.quaternion.setFromUnitVectors(UP, tmp.normalize())
         beam.scale.set(1, len, 1)
-      } else {
+      } else if (beam) {
         beam.visible = false
       }
     }
@@ -315,28 +417,7 @@ export default function Enemies() {
   return (
     <>
       {Array.from({ length: MAX }, (_, i) => (
-        <group key={i}>
-          <group ref={(el) => (groups.current[i] = el)} visible={false}>
-            {ENEMY_LIST.map((type, j) => {
-              const Model = MODELS[type]
-              return (
-                <group
-                  key={type}
-                  ref={(el) => {
-                    if (!models.current[i]) models.current[i] = []
-                    models.current[i][j] = el
-                  }}
-                >
-                  <Model />
-                </group>
-              )
-            })}
-          </group>
-          <mesh ref={(el) => (beams.current[i] = el)} visible={false}>
-            <cylinderGeometry args={[0.035, 0.035, 1, 6]} />
-            <meshBasicMaterial color={[4, 0.3, 0.3]} toneMapped={false} transparent opacity={0.85} />
-          </mesh>
-        </group>
+        <Slot key={i} index={i} bind={bind} />
       ))}
     </>
   )

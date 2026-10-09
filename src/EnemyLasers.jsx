@@ -1,9 +1,10 @@
 // src/EnemyLasers.jsx
-// Tiros da Armada Escarlate: lasers verdes ("bolt") e plasma laranja lento e forte ("plasma").
+// Tiros da Armada do Caos: lasers verdes ("bolt"), plasma laranja lento e forte ("plasma"),
+// disparo carregado ("heavy") e plasma TELEGUIADO roxo ("seeker", pode ser abatido a tiros).
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { game, frameDt, hitsShip, damagePlayer } from './gameState'
+import { game, frameDt, hitsShip, damagePlayer, segmentSphere } from './gameState'
 import { sfx } from './audio'
 
 const MAX = 220
@@ -11,10 +12,12 @@ const UP = new THREE.Vector3(0, 1, 0)
 const dummy = new THREE.Object3D()
 const mid = new THREE.Vector3()
 const dirTmp = new THREE.Vector3()
+const want = new THREE.Vector3()
 const COLORS = {
   bolt: new THREE.Color(0.5, 3.4, 0.6),
   plasma: new THREE.Color(3.6, 1.4, 0.3),
   heavy: new THREE.Color(4, 0.5, 2.6), // disparo carregado do Ferrão
+  seeker: new THREE.Color(2.6, 0.6, 4), // plasma teleguiado da Arraia/Tormenta
 }
 
 export default function EnemyLasers() {
@@ -72,20 +75,38 @@ export default function EnemyLasers() {
       const b = pool[i]
       if (b.active) {
         b.prev.copy(b.pos)
+        if (b.kind === 'seeker' && b.life > 0.4) {
+          // Teleguiado: a velocidade gira aos poucos para a nave (curva limitada → dá para despistar)
+          const sp = b.vel.length()
+          want.subVectors(game.shipPos, b.pos).normalize().multiplyScalar(sp)
+          b.vel.lerp(want, Math.min(1, 1.1 * dt)).setLength(sp)
+        }
         b.pos.addScaledVector(b.vel, dt)
         b.life += dt
-        if (b.life > 5 || b.pos.z > 25) b.active = false
+        // Recicla por tempo de vida ou se ficou muito longe da nave (voo livre: vale em qualquer direção)
+        if (b.life > (b.kind === 'seeker' ? 7 : 4.5) || b.pos.distanceToSquared(game.shipPos) > 700 * 700) b.active = false
+        // Plasma teleguiado pode ser derrubado pelos lasers do jogador
+        if (b.active && b.kind === 'seeker') {
+          for (const l of game.playerLasers) {
+            if (l.active && segmentSphere(l.prev, l.pos, b.pos, 1.4)) {
+              l.active = false
+              b.active = false
+              game.fx.sparks(b.pos, 'blue', 12)
+              break
+            }
+          }
+        }
 
         // Testa a ponta e o meio do trajeto do frame (evita atravessar a nave)
         if (b.active && game.phase === 'playing') {
           mid.addVectors(b.prev, b.pos).multiplyScalar(0.5)
-          const pad = b.kind === 'plasma' ? 0.5 : b.kind === 'heavy' ? 0.35 : 0
+          const pad = b.kind === 'plasma' || b.kind === 'seeker' ? 0.5 : b.kind === 'heavy' ? 0.35 : 0
           if (hitsShip(b.pos, pad) || hitsShip(mid, pad)) {
             b.active = false
             if (game.rollTimer > 0) {
               damagePlayer(0, 'laser') // conta como rebatido (som + evento)
               game.fx.sparks(b.pos, 'blue', 10)
-            } else if (damagePlayer(b.kind === 'heavy' ? 18 : b.kind === 'plasma' ? 14 : 8, 'laser')) {
+            } else if (damagePlayer(b.kind === 'heavy' ? 18 : b.kind === 'plasma' || b.kind === 'seeker' ? 14 : 8, 'laser')) {
               game.fx.sparks(b.pos, b.kind === 'plasma' ? 'orange' : 'green', 14)
             }
           }
@@ -96,6 +117,7 @@ export default function EnemyLasers() {
         dirTmp.copy(b.vel).normalize()
         dummy.quaternion.setFromUnitVectors(UP, dirTmp)
         if (b.kind === 'plasma') dummy.scale.set(4, 0.45, 4)
+        else if (b.kind === 'seeker') dummy.scale.set(6, 0.5, 6)
         else if (b.kind === 'heavy') dummy.scale.set(2.6, 2.2, 2.6)
         else dummy.scale.set(1, 1, 1)
       } else {

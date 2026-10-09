@@ -5,45 +5,50 @@
 import * as THREE from 'three'
 import { sfx } from './audio'
 
-// "Quadrado" imaginário em que a nave pode se mover (unidades do mundo, centrado em 0,0)
-export const BOUNDS = { x: 9, y: 5 }
-
 export const CONFIG = {
-  // --- Nave ---
-  shipFollow: 6, // taxa de aproximação da nave ao alvo (maior = mais responsiva / menos "peso")
-  keyboardSpeed: 14, // velocidade com que WASD move o alvo (unidades/seg)
+  // --- Voo livre 360° ---
+  flySpeed: 44, // velocidade de cruzeiro (unidades/seg). 1 unidade ≈ 2 metros
+  boostSpeed: 88, // velocidade no turbo
+  yawRate: 1.35, // rad/s máximos de guinada (virar para os lados)
+  pitchRate: 1.6, // rad/s máximos de arfagem (subir/descer o nariz)
+  turnResponse: 5, // quão rápido o comando chega ao máximo (maior = mais "nervosa")
+  autoLevel: 1.4, // força que desvira a nave para ficar com as asas niveladas
+  mouseDeadzone: 0.07, // zona morta no centro da tela (fração da tela)
+  arenaRadius: 750, // no espaço: além disso a nave é guiada de volta
+  surfaceRadius: 2300, // na atmosfera: raio da área de combate sobre a cidade
+  minAltitude: 22, // altura mínima sobre o solo (subfase planetária)
+  maxAltitude: 950,
   maxShield: 100,
   invulnTime: 0.8, // segundos invulnerável após levar dano
 
-  // --- Câmera ---
-  cameraFollow: 3, // taxa do lerp da câmera (menor = mais atraso / mais "peso")
-  cameraOffset: new THREE.Vector3(0, 2.8, 11), // atrás (+Z) e acima (+Y) da nave
-  cameraParallax: 0.55, // 0 = câmera parada no centro, 1 = acompanha 100% o X/Y da nave
+  // --- Câmera de perseguição ---
+  cameraFollow: 4.5, // taxa do slerp da rotação da câmera (menor = mais atraso / mais "peso")
+  cameraOffset: new THREE.Vector3(0, 3.1, 12.5), // atrás (+Z local) e acima (+Y local) da nave
+  cameraBackOffset: new THREE.Vector3(0, 3.4, -15), // olhar para trás (V)
 
   // --- Mira ---
-  aimDistance: 45, // distância (em -Z) do plano da mira
-  aimLead: 1.6, // quanto a mira "abre" além da posição da nave (estilo on-rails)
+  aimDistance: 90, // distância à frente onde os canhões convergem
+  assistAngle: 0.11, // rad (~6°): inimigo dentro desse cone recebe a mira automática
+  assistRange: 340,
 
   // --- Lasers ---
-  laserSpeed: 170, // unidades/seg
-  laserMaxDistance: 260, // após percorrer isso, o laser é reciclado
+  laserSpeed: 190, // unidades/seg
+  laserMaxDistance: 420, // após percorrer isso, o laser é reciclado
   fireCooldown: [0.13, 0.12, 0.09, 0.1, 0.065], // segundos entre rajadas, por nível de arma
   maxWeaponLevel: 4,
-  missileSpeed: 75,
+  missileSpeed: 95,
   missileTurn: 4.2, // rad/s de correção de rumo do míssil teleguiado
   droneDuration: 25, // segundos de duração do drone de escolta
 
   // --- Manobras ---
-  boostMul: 1.8, // multiplicador da velocidade do cenário no turbo
-  boostDrain: 0.5, // quanto do medidor o turbo gasta por segundo
-  boostRegen: 0.18, // quanto o medidor recarrega por segundo
+  boostDrain: 0.42, // quanto do medidor o turbo gasta por segundo
+  boostRegen: 0.16, // quanto o medidor recarrega por segundo
   rollDuration: 0.55, // duração do giro evasivo (Q/E)
   rollCooldown: 0.9,
-  bombRadius: 24,
+  bombRadius: 30,
 
-  // --- Mundo ---
-  worldSpeed: 60, // velocidade da "poeira espacial" (sensação de avanço)
-  comboWindow: 2.5, // segundos para manter o combo vivo
+  comboWindow: 3, // segundos para manter o combo vivo
+  entryDuration: 5.2, // duração da cinemática de entrada na atmosfera
 }
 
 // Posição LOCAL (em relação à nave) da ponta dos 4 canhões.
@@ -55,127 +60,160 @@ export const CANNONS = [
   new THREE.Vector3(-0.9, -0.15, -2.6), // interno esquerdo
 ]
 
-// Tipos de inimigos da Armada Escarlate
+// ---------------------------------------------------------------------------
+// Frota da Armada do Caos
+//  ai: dogfight (passa atirando e faz a volta) · hunt (persegue e colide)
+//      standoff (fica a uma distância "range" circulando e atirando) · strafe (passadas laterais)
+//  weapon: single · twin · triple · fan3 · fan5 · seeker (plasma teleguiado) · charge (tiro carregado)
+//          launch (lança naves menores, tipo em "spawns")
+//  turn: rad/s máximos de curva (menor = nave pesada)
+// ---------------------------------------------------------------------------
 export const ENEMY_TYPES = {
-  fighter: { name: 'Vespa', hp: 3, radius: 1.9, score: 100, speed: 55, fireEvery: 1.7, boltSpeed: 70 },
-  interceptor: { name: 'Lança', hp: 2, radius: 1.6, score: 150, speed: 78, fireEvery: 1.4, boltSpeed: 85 },
-  bomber: { name: 'Martelo', hp: 12, radius: 2.8, score: 400, speed: 32, fireEvery: 2.6, boltSpeed: 42 },
-  // Novos
-  kamikaze: { name: 'Agulha', hp: 1.5, radius: 1.6, score: 120, speed: 62, fireEvery: Infinity, boltSpeed: 0 }, // persegue e colide
-  gunship: { name: 'Ômega', hp: 9, radius: 2.6, score: 350, speed: 40, fireEvery: 2.3, boltSpeed: 60 }, // rajada em leque
-  carrier: { name: 'Colmeia', hp: 22, radius: 3.6, score: 700, speed: 26, fireEvery: 4.2, boltSpeed: 0 }, // lança Agulhas
-  sniper: { name: 'Ferrão', hp: 5, radius: 2.1, score: 300, speed: 45, fireEvery: 3.6, boltSpeed: 170 }, // mira com laser e dispara forte
+  fighter: { name: 'Vespa', model: 'fighter', scale: 0.42, hp: 3, radius: 2, score: 100, speed: 46, turn: 1.5, ai: 'dogfight', fireEvery: 1.1, boltSpeed: 95, weapon: 'twin' },
+  interceptor: { name: 'Lança', model: 'interceptor', scale: 0.4, hp: 2, radius: 1.8, score: 150, speed: 62, turn: 1.9, ai: 'dogfight', fireEvery: 0.9, boltSpeed: 105, weapon: 'single' },
+  kamikaze: { name: 'Agulha', model: 'kamikaze', scale: 0.3, hp: 1.5, radius: 1.7, score: 120, speed: 58, turn: 2.2, ai: 'hunt', fireEvery: Infinity, boltSpeed: 0, weapon: 'none' },
+  swarm: { name: 'Enxame', model: 'swarm', scale: 0.27, hp: 1, radius: 1.5, score: 90, speed: 70, turn: 2.6, ai: 'hunt', fireEvery: Infinity, boltSpeed: 0, weapon: 'none' },
+  ace: { name: 'Espectro', model: 'ace', scale: 0.44, hp: 6, radius: 2, score: 450, speed: 64, turn: 2.4, ai: 'dogfight', fireEvery: 0.65, boltSpeed: 115, weapon: 'triple' },
+  raptor: { name: 'Raptor', model: 'raptor', scale: 0.46, hp: 7, radius: 2, score: 400, speed: 56, turn: 1.8, ai: 'dogfight', fireEvery: 0.8, boltSpeed: 110, weapon: 'twin' },
+  corsair: { name: 'Corsário', model: 'corsair', scale: 0.5, hp: 8, radius: 2.8, score: 300, speed: 40, turn: 1.1, ai: 'strafe', fireEvery: 1.2, boltSpeed: 90, weapon: 'twin' },
+  sniper: { name: 'Ferrão', model: 'sniper', scale: 0.42, hp: 5, radius: 2.2, score: 300, speed: 34, turn: 1, ai: 'standoff', range: 150, fireEvery: 3.6, boltSpeed: 190, weapon: 'charge' },
+  lancer: { name: 'Arpão', model: 'lancer', scale: 0.45, hp: 7, radius: 2.3, score: 450, speed: 38, turn: 1, ai: 'standoff', range: 175, fireEvery: 3.2, boltSpeed: 210, weapon: 'charge' },
+  bomber: { name: 'Martelo', model: 'bomber', scale: 0.6, hp: 12, radius: 3, score: 400, speed: 28, turn: 0.7, ai: 'standoff', range: 110, fireEvery: 2.6, boltSpeed: 55, weapon: 'fan3' },
+  gunship: { name: 'Ômega', model: 'gunship', scale: 0.48, hp: 9, radius: 2.8, score: 350, speed: 32, turn: 0.8, ai: 'standoff', range: 90, fireEvery: 2.3, boltSpeed: 75, weapon: 'fan5' },
+  warden: { name: 'Sentinela', model: 'warden', scale: 0.56, hp: 18, radius: 3.4, score: 550, speed: 30, turn: 0.8, ai: 'standoff', range: 80, fireEvery: 1.8, boltSpeed: 80, weapon: 'fan5' },
+  manta: { name: 'Arraia', model: 'manta', scale: 0.55, hp: 10, radius: 2.9, score: 450, speed: 30, turn: 0.8, ai: 'standoff', range: 130, fireEvery: 3.2, boltSpeed: 40, weapon: 'seeker' },
+  tormenta: { name: 'Tormenta', model: 'tormenta', scale: 0.66, hp: 16, radius: 3.3, score: 650, speed: 26, turn: 0.6, ai: 'standoff', range: 120, fireEvery: 3, boltSpeed: 42, weapon: 'seeker' },
+  carrier: { name: 'Colmeia', model: 'carrier', scale: 0.75, hp: 22, radius: 3.8, score: 700, speed: 22, turn: 0.5, ai: 'standoff', range: 170, fireEvery: 5, boltSpeed: 0, weapon: 'launch', spawns: 'kamikaze' },
+  hive: { name: 'Colmeia Real', model: 'hive', scale: 0.78, hp: 26, radius: 3.9, score: 800, speed: 22, turn: 0.5, ai: 'standoff', range: 180, fireEvery: 5.5, boltSpeed: 0, weapon: 'launch', spawns: 'swarm' },
 }
-// Ordem dos modelos em cada "slot" de inimigo (Enemies.jsx)
 export const ENEMY_LIST = Object.keys(ENEMY_TYPES)
+
+// Naves-mãe: gigantes com torres, hangares que lançam caças e um reator (ponto fraco)
+export const MOTHERSHIP_TYPES = {
+  leviata: { name: 'Nave-mãe Leviatã', model: 'motherLeviata', scale: 7, turrets: 4, turretHp: 12, reactorHp: 60, score: 3000, launch: ['fighter', 'interceptor'], launchEvery: 7, speed: 7 },
+  tita: { name: 'Nave-mãe Titã', model: 'motherTita', scale: 6.6, turrets: 5, turretHp: 14, reactorHp: 70, score: 3500, launch: ['ace', 'raptor'], launchEvery: 8, speed: 6 },
+  colmeiaMae: { name: 'Colmeia-Mãe', model: 'motherColmeia', scale: 6.4, turrets: 4, turretHp: 12, reactorHp: 55, score: 3000, launch: ['swarm', 'kamikaze'], launchEvery: 6, speed: 5, disc: true },
+}
 
 // Armas primárias por nível (pickup dourado sobe o nível)
 export const WEAPONS = ['LASER DUPLO', 'LASER QUÁDRUPLO', 'PLASMA', 'PLASMA EM LEQUE', 'HIPER-LASER']
 
 // ---------------------------------------------------------------------------
 // CAMPANHA: missões do Sesc e do Senac Ceará
-// Cada missão tem um prazo (segundos), um indicador principal com meta e um bônus.
-//  - indicator.type 'kills'  → conta naves inimigas derrubadas (pela equipe toda)
+// Cada missão tem duas etapas: combate em ÓRBITA e, na metade do prazo, a nave ENTRA NA ATMOSFERA
+// (subfase planetária). Na Terra, a batalha acontece no céu de Fortaleza-CE.
+//  - indicator.type 'kills'  → conta naves inimigas derrubadas (pela equipe toda; nave-mãe vale 5)
 //  - indicator.type 'tokens' → conta "cápsulas de meta" coletadas pelo jogador
 //  - bonus.type: 'accuracy' (precisão mínima), 'minShield' (escudo nunca abaixo de X%),
 //                'combo' (sequência mínima de abates), 'finalShield' (terminar com X% de escudo)
+//  - motherships: naves-mãe que aparecem em cada etapa
 // Atingimento = realizado / meta. 100% = 1 estrela, 130% = 2 estrelas, bônus = +1 estrela.
 // ---------------------------------------------------------------------------
 export const MISSIONS = [
   {
     org: 'SENAC',
     title: 'Campanha de Matrículas',
-    place: 'Órbita da Terra · Unidades Centro e Aldeota',
+    place: 'Órbita da Terra → céu de Fortaleza-CE',
     location: 'earth',
+    surface: 'fortaleza',
     speaker: 'roberta',
     briefing:
-      'A Armada do Caos lançou a frota da Evasão contra as nossas turmas. Cada nave derrubada é uma matrícula garantida. Bata a meta antes do prazo!',
-    indicator: { type: 'kills', label: 'matrículas', unit: 'matrícula', meta: 12 },
-    bonus: { type: 'accuracy', value: 35, label: 'Precisão de tiro ≥ 35%' },
-    duration: 55,
-    mix: { fighter: 0.8, kamikaze: 0.2 },
-    spawnEvery: 1.5,
-    maxAlive: 5,
-    asteroidEvery: 1.4,
+      'A Armada do Caos lançou a frota da Evasão contra as nossas turmas. Combata em órbita e depois desça para defender Fortaleza: uma nave-mãe Leviatã está sobre a cidade! Cada nave derrubada é uma matrícula garantida.',
+    indicator: { type: 'kills', label: 'matrículas', unit: 'matrícula', meta: 22 },
+    bonus: { type: 'accuracy', value: 30, label: 'Precisão de tiro ≥ 30%' },
+    duration: 130,
+    mix: { fighter: 0.5, kamikaze: 0.2, interceptor: 0.15, corsair: 0.15 },
+    spawnEvery: 1.6,
+    maxAlive: 9,
+    motherships: { surface: ['leviata'] },
   },
   {
     org: 'SESC',
     title: 'Saúde & Odontologia',
-    place: 'Órbita da Lua · Rede de clínicas Sesc',
+    place: 'Órbita da Lua → superfície lunar',
     location: 'moon',
+    surface: 'moonSurface',
     speaker: 'ivone',
     briefing:
-      'As agendas das clínicas estão à deriva no espaço! Recolha as cápsulas de atendimento (anéis verdes) enquanto a frota das Faltas tenta impedir.',
-    indicator: { type: 'tokens', label: 'atendimentos', unit: 'atendimento', meta: 9 },
-    tokenEvery: 3.2,
-    bonus: { type: 'finalShield', value: 50, label: 'Terminar com escudo ≥ 50%' },
-    duration: 55,
-    mix: { fighter: 0.5, interceptor: 0.3, kamikaze: 0.2 },
-    spawnEvery: 1.6,
-    maxAlive: 5,
-    asteroidEvery: 1.8,
+      'As agendas das clínicas estão à deriva! Recolha as cápsulas de atendimento (anéis verdes) em órbita e na superfície da Lua. Uma Colmeia-Mãe está lançando enxames contra a rede de clínicas.',
+    indicator: { type: 'tokens', label: 'atendimentos', unit: 'atendimento', meta: 10 },
+    tokenEvery: 4.5,
+    bonus: { type: 'finalShield', value: 45, label: 'Terminar com escudo ≥ 45%' },
+    duration: 120,
+    mix: { fighter: 0.35, interceptor: 0.25, kamikaze: 0.15, swarm: 0.1, corsair: 0.15 },
+    spawnEvery: 1.7,
+    maxAlive: 9,
+    motherships: { orbit: ['colmeiaMae'] },
   },
   {
     org: 'SENAC',
     title: 'Ativo Aula: Turmas Confirmadas',
-    place: 'Órbita de Marte · Toda sexta, sem falta',
+    place: 'Órbita de Marte → Valles Marineris',
     location: 'mars',
+    surface: 'marsSurface',
     speaker: 'janiele',
     briefing:
-      'Os Adiamentos estão cercando as turmas! Derrube as naves para confirmar o início das aulas. Mantenha a sequência para mostrar consistência.',
-    indicator: { type: 'kills', label: 'turmas confirmadas', unit: 'turma confirmada', meta: 16 },
+      'Os Adiamentos trouxeram os ases Espectro e uma nave-mãe Titã! Derrube as naves para confirmar o início das aulas, em órbita e nos cânions de Marte. Mantenha a sequência para mostrar consistência.',
+    indicator: { type: 'kills', label: 'turmas confirmadas', unit: 'turma confirmada', meta: 28 },
     bonus: { type: 'combo', value: 8, label: 'Sequência de 8 abates' },
-    duration: 55,
-    mix: { fighter: 0.4, interceptor: 0.3, gunship: 0.2, kamikaze: 0.1 },
-    spawnEvery: 1.2,
-    maxAlive: 6,
-    asteroidEvery: 1.6,
+    duration: 130,
+    mix: { fighter: 0.25, interceptor: 0.2, gunship: 0.12, ace: 0.13, raptor: 0.12, swarm: 0.1, lancer: 0.08 },
+    spawnEvery: 1.3,
+    maxAlive: 10,
+    motherships: { orbit: ['tita'], surface: ['leviata'] },
   },
   {
     org: 'SESC',
     title: 'Turismo Social & Cultura',
-    place: 'Luas de Júpiter · Excursões e palcos do Sesc',
+    place: 'Luas de Júpiter → topo das nuvens de Júpiter',
     location: 'jupiter',
+    surface: 'jupiterClouds',
     speaker: 'ivone',
     briefing:
-      'Os ônibus do Turismo Social e o público do teatro precisam embarcar! Colete as cápsulas de passageiros e não deixe o escudo cair demais.',
-    indicator: { type: 'tokens', label: 'passageiros embarcados', unit: 'passageiro', meta: 11 },
-    tokenEvery: 2.8,
-    bonus: { type: 'minShield', value: 30, label: 'Escudo nunca abaixo de 30%' },
-    duration: 55,
-    mix: { fighter: 0.3, interceptor: 0.2, bomber: 0.15, sniper: 0.2, kamikaze: 0.15 },
-    spawnEvery: 1.3,
-    maxAlive: 6,
-    asteroidEvery: 1.5,
+      'Os ônibus do Turismo Social e o público do teatro precisam embarcar! Colete as cápsulas de passageiros em órbita e sobre as nuvens de Júpiter. Arraias lançam plasma teleguiado: faça curvas fechadas!',
+    indicator: { type: 'tokens', label: 'passageiros embarcados', unit: 'passageiro', meta: 12 },
+    tokenEvery: 4,
+    bonus: { type: 'minShield', value: 25, label: 'Escudo nunca abaixo de 25%' },
+    duration: 125,
+    mix: { fighter: 0.2, bomber: 0.08, sniper: 0.12, manta: 0.12, corsair: 0.15, kamikaze: 0.1, carrier: 0.05, hive: 0.05, raptor: 0.13 },
+    spawnEvery: 1.4,
+    maxAlive: 10,
+    motherships: { surface: ['colmeiaMae'] },
   },
   {
     org: 'FECOMÉRCIO',
     title: 'Ouvidoria em Dia',
-    place: 'Anéis de Saturno · Backoffice Sesc/Senac',
+    place: 'Anéis de Saturno → tempestade de Saturno',
     location: 'saturn',
+    surface: 'saturnClouds',
     speaker: 'alan',
     briefing:
-      'O painel mostra uma onda de manifestações pendentes chegando. Cada nave derrubada é uma resposta enviada no prazo. Os bombardeiros são os casos complexos!',
-    indicator: { type: 'kills', label: 'manifestações respondidas', unit: 'resposta enviada', meta: 20 },
-    bonus: { type: 'accuracy', value: 40, label: 'Precisão de tiro ≥ 40%' },
-    duration: 60,
-    mix: { fighter: 0.25, interceptor: 0.2, bomber: 0.12, gunship: 0.15, sniper: 0.13, carrier: 0.07, kamikaze: 0.08 },
-    spawnEvery: 1.0,
-    maxAlive: 8,
-    asteroidEvery: 1.3,
+      'O painel mostra uma onda de manifestações pendentes: duas naves-mãe em órbita e uma Colmeia-Mãe na atmosfera! Cada nave derrubada é uma resposta enviada no prazo. As Sentinelas e Tormentas são os casos complexos.',
+    indicator: { type: 'kills', label: 'manifestações respondidas', unit: 'resposta enviada', meta: 34 },
+    bonus: { type: 'accuracy', value: 35, label: 'Precisão de tiro ≥ 35%' },
+    duration: 140,
+    mix: { fighter: 0.18, interceptor: 0.12, ace: 0.1, raptor: 0.1, warden: 0.1, tormenta: 0.08, gunship: 0.08, sniper: 0.06, lancer: 0.06, swarm: 0.07, hive: 0.05 },
+    spawnEvery: 1.1,
+    maxAlive: 12,
+    motherships: { orbit: ['leviata', 'tita'], surface: ['colmeiaMae'] },
   },
   {
     org: 'SESC + SENAC',
     title: 'Fechamento Anual de Metas',
-    place: 'Órbita da Terra ao amanhecer · Fortaleza do Caos',
+    place: 'Órbita da Terra → amanhecer sobre Fortaleza-CE',
     location: 'earthDawn',
+    surface: 'fortalezaDawn',
     speaker: 'roberta',
     briefing:
-      'O Almirante Korrath trouxe a Fortaleza do Caos para impedir o fechamento do ano. Destrua as quatro torres, exponha o núcleo e garanta o resultado de 2026!',
+      'O Almirante Korrath vai descer a Fortaleza do Caos sobre a nossa cidade ao amanhecer! Rompa o bloqueio em órbita, entre na atmosfera e destrua as quatro torres e o núcleo da fortaleza no céu de Fortaleza. Garanta o resultado de 2026!',
     indicator: { type: 'boss', label: 'fortaleza destruída', meta: 1 },
     bonus: { type: 'finalShield', value: 40, label: 'Vencer com escudo ≥ 40%' },
     boss: true,
-    asteroidEvery: Infinity,
+    orbitKills: 10, // abates em órbita para abrir caminho até a atmosfera
+    mix: { fighter: 0.3, interceptor: 0.2, ace: 0.15, raptor: 0.15, kamikaze: 0.1, swarm: 0.1 },
+    spawnEvery: 1.3,
+    maxAlive: 9,
+    motherships: { orbit: ['tita'] },
   },
 ]
 
@@ -183,20 +221,30 @@ const noop = () => {}
 
 export const game = {
   phase: 'title', // title | hangar | briefing | playing | photo | debrief | paused | dying | gameover | victory
+  stage: 'orbit', // orbit | entry | surface  (etapa da missão)
   keys: {}, // teclas pressionadas (KeyW, KeyA, Space...)
   stickX: 0, // controle analógico / touch joystick (-1..1)
   stickY: 0,
   autoFire: false, // disparo automático para dispositivos móveis
   touchBoost: false, // turbo via botão de toque
-  target: new THREE.Vector2(0, 0), // posição X/Y DESEJADA da nave (mouse/WASD/touch escrevem aqui)
+  mouse: new THREE.Vector2(), // posição do mouse normalizada (-1..1); vira "joystick" quando ativo
+  mouseActive: false,
   shipPos: new THREE.Vector3(), // posição real da nave
-  shipQuat: new THREE.Quaternion(), // rotação real da nave (para posicionar os canhões com o roll)
-  aim: new THREE.Vector3(0, 0, -45), // ponto da mira no mundo
+  shipQuat: new THREE.Quaternion(), // rotação de voo da nave
+  shipQuatInv: new THREE.Quaternion(), // inversa (para levar pontos do mundo para o espaço da nave)
+  shipFwd: new THREE.Vector3(0, 0, -1), // para onde o nariz aponta
+  shipUp: new THREE.Vector3(0, 1, 0),
+  shipVel: new THREE.Vector3(0, 0, -44),
+  aim: new THREE.Vector3(0, 0, -90), // ponto da mira no mundo
+  assist: null, // alvo travado pela mira automática
+  camera: null, // câmera do R3F (o HUD usa para projetar o radar e as setas)
+  ground: 0, // altura do solo na subfase planetária
 
   // Pools e funções registrados pelos componentes quando montam
   playerLasers: [],
   enemies: [],
-  asteroids: [],
+  motherships: [],
+  pickups: [],
   boss: null,
   fx: { explode: noop, sparks: noop, shockwave: noop },
   firePlayerLaser: noop,
@@ -204,8 +252,9 @@ export const game = {
   fireMissile: noop,
   clearEnemyLasers: noop,
   spawnEnemy: noop,
+  spawnMothership: noop,
   damageEnemy: noop,
-  destroyAsteroid: noop,
+  damageMotherships: noop,
   spawnPickup: noop,
   startBoss: noop,
   damageBossArea: noop,
@@ -215,14 +264,19 @@ export const game = {
 export function resetGame() {
   Object.assign(game, {
     phase: 'title',
+    stage: 'orbit',
+    entryT: 0,
     time: 0,
     timeScale: 1, // < 1 = câmera lenta
-    worldMul: 1, // multiplicador de velocidade do cenário (turbo)
+    worldMul: 1, // multiplicador de velocidade (turbo) usado pelos efeitos
+    speed: CONFIG.flySpeed,
     wantsToFire: false,
     wantsBomb: false,
     stickX: 0,
     stickY: 0,
     touchBoost: false,
+    mouseActive: false,
+    lookBack: false,
     rollRequest: 0,
     rollTimer: 0,
     rollDir: 1,
@@ -248,16 +302,19 @@ export function resetGame() {
     kills: 0,
     missionIndex: 0,
     missionTime: 0, // segundos restantes no prazo da missão
-    asteroidEvery: Infinity,
     mstats: null, // indicadores da missão em andamento
     report: [], // relatório de cada missão concluída
     bossDefeated: false,
     deathTimer: 0,
+    outOfBounds: false,
+    lowAltitude: false,
     stats: { shots: 0, hits: 0 },
     events: [], // fila de acontecimentos lida pelo Director (rádio, dicas...)
+    assist: null,
   })
-  game.target.set(0, 0)
   game.keys = {}
+  game.shipPos.set(0, 0, 0)
+  game.shipQuat.identity()
 }
 resetGame()
 
@@ -300,20 +357,76 @@ export function segmentSphere(a, b, c, r) {
   return _ac.distanceToSquared(c) <= r * r
 }
 
-// A nave é larga e baixa: usamos um elipsoide (x²/a² + y²/b² + z²/c² ≤ 1) em vez de esfera
-const SHIP_HALF = { x: 2.4, y: 0.75, z: 1.7 }
+// A nave é larga e baixa: usamos um elipsoide (x²/a² + y²/b² + z²/c² ≤ 1) em vez de esfera.
+// Como a nave gira em qualquer direção, o ponto é levado para o espaço LOCAL da nave:
+//   local = inversa(rotação) · (p − posição)
+const SHIP_HALF = { x: 2.4, y: 0.75, z: 1.9 }
+const _local = new THREE.Vector3()
 export function hitsShip(p, pad = 0) {
-  const dx = (p.x - game.shipPos.x) / (SHIP_HALF.x + pad)
-  const dy = (p.y - game.shipPos.y) / (SHIP_HALF.y + pad)
-  const dz = (p.z - game.shipPos.z) / (SHIP_HALF.z + pad)
+  _local.subVectors(p, game.shipPos)
+  if (_local.lengthSq() > 64 + pad * pad * 4) return false // descarte rápido
+  _local.applyQuaternion(game.shipQuatInv)
+  const dx = _local.x / (SHIP_HALF.x + pad)
+  const dy = _local.y / (SHIP_HALF.y + pad)
+  const dz = _local.z / (SHIP_HALF.z + pad)
   return dx * dx + dy * dy + dz * dz <= 1
+}
+
+// ---------------------------------------------------------------------------
+// Alvos: lista única de tudo que pode ser atingido (caças, peças das naves-mãe, chefe).
+// Usada pela mira automática, mísseis, alas, drone e radar.
+// Cada alvo: { pos (Vector3 do mundo), r (raio), kind, hit(dano, dono) }
+// ---------------------------------------------------------------------------
+const _targets = []
+export function collectTargets() {
+  _targets.length = 0
+  for (const e of game.enemies) if (e.active) _targets.push(e.target)
+  for (const m of game.motherships) if (m.active && m.state === 'fight') for (const t of m.targets) if (t.alive) _targets.push(t)
+  const b = game.boss
+  if (b && b.active && b.state === 'fight') for (const t of b.targets) if (t.alive) _targets.push(t)
+  return _targets
+}
+
+const _to = new THREE.Vector3()
+/**
+ * Melhor alvo dentro de um cone à frente de `from` na direção `dir`.
+ * Pontuação = ângulo + distância/1000 (prefere o mais centralizado; desempata pelo mais perto).
+ * cosMin: cosseno do meio-ângulo do cone (ex: 0.5 = 60°).
+ */
+export function bestTarget(from, dir, cosMin, range) {
+  let best = null
+  let bestScore = Infinity
+  const r2 = range * range
+  for (const t of collectTargets()) {
+    _to.subVectors(t.pos, from)
+    const d2 = _to.lengthSq()
+    if (d2 > r2 || d2 < 1) continue
+    const d = Math.sqrt(d2)
+    const cos = _to.dot(dir) / d
+    if (cos < cosMin) continue
+    const score = (1 - cos) + d / 1000
+    if (score < bestScore) {
+      bestScore = score
+      best = t
+    }
+  }
+  return best
+}
+
+// Dano em área (bombas, mísseis): atinge tudo cujo centro esteja a menos de (raio + raio do alvo)
+export function damageArea(p, radius, dmg, owner = 'player') {
+  const list = collectTargets().slice() // cópia: acertos podem desativar alvos durante o laço
+  for (const t of list) {
+    const r = radius + t.r
+    if (t.pos.distanceToSquared(p) < r * r) t.hit(dmg, owner)
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Regras de jogo compartilhadas
 // ---------------------------------------------------------------------------
 export function damagePlayer(amount, kind = 'laser') {
-  if (game.phase !== 'playing' || game.invuln > 0) return false
+  if (game.phase !== 'playing' || game.invuln > 0 || game.stage === 'entry') return false
   // Durante o giro evasivo, lasers ricocheteiam
   if (kind === 'laser' && game.rollTimer > 0) {
     sfx.deflect()
@@ -347,7 +460,7 @@ function killPlayer() {
 // Pontuação com combo: a cada 5 abates seguidos o multiplicador sobe (máx. x5)
 export function addScore(points, owner = 'player') {
   if (game.phase !== 'playing') return
-  if (owner === 'player') {
+  if (owner === 'player' || owner === 'drone') {
     game.combo++
     game.maxCombo = Math.max(game.maxCombo, game.combo)
     if (game.mstats) game.mstats.maxCombo = Math.max(game.mstats.maxCombo, game.combo)
@@ -365,7 +478,7 @@ if (import.meta.env.VITE_DEBUG && typeof window !== 'undefined') window.__fenix 
 
 // Novo registro de indicadores para a missão que está começando
 export function newMissionStats() {
-  return { kills: 0, tokens: 0, shots: game.stats.shots, hits: game.stats.hits, minShield: game.shield, maxCombo: 0 }
+  return { kills: 0, tokens: 0, shots: game.stats.shots, hits: game.stats.hits, minShield: game.shield, maxCombo: 0, orbitKills: 0 }
 }
 
 // Avalia a missão: atingimento da meta, bônus e estrelas

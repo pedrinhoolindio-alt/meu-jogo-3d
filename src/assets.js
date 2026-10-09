@@ -6,7 +6,7 @@ import PHOTOS from './embedded/portraits'
 
 const LOCAL = (import.meta.env.BASE_URL || '/') + 'assets/'
 // Versão fixa (commit) para a CDN não servir arquivos antigos do cache
-export const ASSETS_VERSION = 'e5be13ba240dddf1fb17a19fc1565b4333275d47'
+export const ASSETS_VERSION = 'f825de52ddb5f30f64f2cf5ec3a95bd9fab02949'
 const CDN = `https://cdn.jsdelivr.net/gh/pedrinhoolindio-alt/fenix-assets@${ASSETS_VERSION}/`
 
 let base = CDN
@@ -36,6 +36,18 @@ export const SHIPS = {
   gunship: 'omen_red',
   carrier: 'challenger_red',
   sniper: 'spitfire_red',
+  swarm: 'zenith_purple',
+  ace: 'dispatcher_purple',
+  raptor: 'striker_purple',
+  corsair: 'bob_red',
+  manta: 'bob_purple',
+  warden: 'omen_purple',
+  tormenta: 'insurgent_purple',
+  lancer: 'spitfire_purple',
+  hive: 'challenger_purple',
+  motherLeviata: 'imperial_red',
+  motherTita: 'imperial_purple',
+  motherColmeia: 'pancake_purple',
   boss: 'pancake_red',
   allyCruiser: 'imperial_blue',
   enemyCruiser: 'imperial_red',

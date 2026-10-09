@@ -31,7 +31,7 @@ export function startGame() {
   setMusicIntensity(1)
   resetGame()
   clearRadio()
-  ui.set({ runId: ui.get().runId + 1, result: null, debrief: null })
+  ui.set({ runId: ui.get().runId + 1, result: null, debrief: null, stage: 'orbit' })
   openBriefing(0)
 }
 
@@ -39,9 +39,11 @@ export function startGame() {
 export function openBriefing(index) {
   game.missionIndex = index
   game.phase = 'briefing'
+  game.stage = 'orbit'
   game.wantsToFire = false
+  game.resetShip = true
   clearRadio()
-  ui.set({ phase: 'briefing', mission: index, banner: null })
+  ui.set({ phase: 'briefing', mission: index, banner: null, stage: 'orbit' })
 }
 
 export function startMission() {
@@ -52,25 +54,61 @@ export function startMission() {
   game.missionTime = m.duration || 0
   game.invuln = 1.5
   game.phase = 'playing'
+  // Toda missão começa em órbita, com a nave no centro da arena apontando para −Z
+  game.stage = 'orbit'
+  game.entryT = 0
+  game.arrived = false
+  game.resetShip = true
   setEngine(true, false)
   ui.set({
     phase: 'playing',
+    stage: 'orbit',
     banner: { id: Date.now(), title: `MISSÃO ${game.missionIndex + 1}`, sub: m.title, alert: !!m.boss },
   })
+  setMusicIntensity(m.boss ? 2 : 1)
+}
+
+// ---------------------------------------------------------------------------
+// Subfase planetária: entrada na atmosfera (cinemática de ~5 s conduzida pelo Player)
+// ---------------------------------------------------------------------------
+export function startEntry() {
+  if (game.stage !== 'orbit') return
+  const m = MISSIONS[game.missionIndex]
+  game.stage = 'entry'
+  game.entryT = 0
+  game.arrived = false
+  game.wantsToFire = game.autoFire
+  game.clearEnemyLasers()
+  ui.set({ banner: { id: Date.now(), title: 'ENTRADA NA ATMOSFERA', sub: m.place.split('→').pop().trim(), alert: false } })
+  sayLine('entry', { priority: 3 })
+}
+
+// No auge do clarão: limpa o campo de batalha da órbita e troca o cenário para a superfície
+export function arriveSurface() {
+  clearField()
+  for (const ms of game.motherships || []) ms.active = false
+  game.ground = 0
+  ui.set({ stage: 'surface' })
+}
+
+// Fim da cinemática: o jogador retoma o controle sobre a cidade/planeta
+export function finishEntry() {
+  game.stage = 'surface'
+  game.invuln = 1.5
+  game.events.push({ type: 'surfaceStart' })
+  const m = MISSIONS[game.missionIndex]
   if (m.boss) {
-    setMusicIntensity(2)
     sayLine('bossWarning', { priority: 3 })
     sayLine('bossTaunt', { priority: 2 })
     sayLine('bossTip', { priority: 2 })
   } else {
-    setMusicIntensity(1)
+    sayLine(m.surface === 'fortaleza' ? 'surface_fortaleza' : 'surface_' + m.surface, { priority: 2 })
   }
 }
 
-// Remove inimigos, asteroides, tiros e itens da tela (fim de missão)
+// Remove inimigos, naves-mãe, tiros e itens da tela (fim de missão / troca de etapa)
 function clearField() {
   for (const e of game.enemies) e.active = false
-  for (const a of game.asteroids) a.active = false
   for (const p of game.pickups || []) p.active = false
   game.clearEnemyLasers()
 }
@@ -81,6 +119,7 @@ export function finishMission() {
   game.report.push(r)
   game.mstats = null
   clearField()
+  for (const ms of game.motherships || []) ms.active = false
   if (m.boss) return endRun('victory')
   game.phase = 'debrief'
   game.wantsToFire = false
@@ -188,5 +227,8 @@ export function toMenu() {
     } catch (e) {}
   }
   playIntro()
-  ui.set({ phase: 'title', banner: null, runId: ui.get().runId + 1 })
+  ui.set({ phase: 'title', banner: null, runId: ui.get().runId + 1, stage: 'orbit' })
 }
+
+// Gancho de depuração (só existe quando o build é feito com VITE_DEBUG=1)
+if (import.meta.env.VITE_DEBUG && typeof window !== 'undefined') window.__flow = { openBriefing, startMission, finishMission, startEntry, endRun }

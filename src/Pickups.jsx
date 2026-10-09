@@ -7,7 +7,7 @@ import * as THREE from 'three'
 import { game, CONFIG, frameDt } from './gameState'
 import { sfx } from './audio'
 
-const MAX = 14
+const MAX = 20
 const TYPES = ['shield', 'weapon', 'bomb', 'goal', 'missile', 'drone']
 const toShip = new THREE.Vector3()
 
@@ -178,20 +178,23 @@ export default function Pickups() {
       const g = groups.current[i]
       if (p.active) {
         p.t += dt
-        p.pos.z += CONFIG.worldSpeed * 0.35 * game.worldMul * dt
-        // Ímã: perto da nave, o item é puxado até ela
+        // Voo livre: os itens ficam parados no espaço (flutuando). Ímã: perto da nave, são puxados até ela
         toShip.subVectors(game.shipPos, p.pos)
         const d = toShip.length()
-        const magnet = p.type === 'goal' ? 13 : 10
-        if (d < magnet) p.pos.addScaledVector(toShip.normalize(), 26 * dt)
-        if (game.phase === 'playing' && d < 3.2) collect(p)
-        if (p.pos.z > 20) p.active = false
+        const magnet = p.type === 'goal' ? 18 : 14
+        if (d < magnet) p.pos.addScaledVector(toShip.normalize(), (40 + game.speed) * dt)
+        if (game.phase === 'playing' && d < 3.8) collect(p)
+        // Somem depois de um tempo (as cápsulas de meta duram mais)
+        if (p.t > (p.type === 'goal' ? 40 : 30)) p.active = false
       }
       g.visible = p.active
       if (!p.active) continue
       g.position.copy(p.pos)
       g.position.y += Math.sin(p.t * 3) * 0.3
       g.rotation.set(0, p.t * 2, Math.sin(p.t) * 0.3)
+      // Os itens ficam maiores para serem vistos de longe; piscam antes de sumir
+      g.scale.setScalar(p.type === 'goal' ? 2.2 : 1.5)
+      if (p.t > (p.type === 'goal' ? 34 : 25)) g.visible = Math.floor(p.t * 8) % 2 === 0
       const ms = models.current[i]
       for (let j = 0; j < TYPES.length; j++) ms[j].visible = TYPES[j] === p.type
     }

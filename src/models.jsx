@@ -132,14 +132,8 @@ export function Ship({ kind, scale = 1, flipped = false, flames, flameMat = M.fl
   )
 }
 
-// Atalhos dos inimigos (nariz para +Z)
-export const FighterModel = () => <Ship kind="fighter" scale={0.42} flameMat={M.enemyFlame} glowColor="#ff6040" />
-export const InterceptorModel = () => <Ship kind="interceptor" scale={0.4} flameMat={M.enemyFlame} glowColor="#ff6040" />
-export const BomberModel = () => <Ship kind="bomber" scale={0.6} flameMat={M.enemyFlame} glowColor="#ff6040" />
-export const KamikazeModel = () => <Ship kind="kamikaze" scale={0.3} flameMat={M.enemyFlame} glowColor="#ff6040" />
-export const GunshipModel = () => <Ship kind="gunship" scale={0.48} flameMat={M.enemyFlame} glowColor="#ff6040" />
-export const CarrierModel = () => <Ship kind="carrier" scale={0.75} flameMat={M.enemyFlame} glowColor="#ff6040" />
-export const SniperModel = () => <Ship kind="sniper" scale={0.42} flameMat={M.enemyFlame} glowColor="#ff6040" />
+// Nave inimiga genérica (nariz para +Z), motores vermelhos
+export const EnemyModel = ({ kind, scale }) => <Ship kind={kind} scale={scale} flameMat={M.enemyFlame} glowColor="#ff6040" />
 
 // Pré-carrega tudo assim que o endereço dos modelos for conhecido
 export function preloadShips() {

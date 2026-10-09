@@ -3,10 +3,29 @@
 // chefe) e decide quando cada personagem fala no rádio.
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { game, MISSIONS, BOUNDS, frameDt, rand } from './gameState'
+import * as THREE from 'three'
+import { game, MISSIONS, frameDt, rand } from './gameState'
+import { spawnAround } from './Enemies'
 import { say, sayLine } from './radio'
 import { sfx } from './audio'
-import { endRun, finishMission } from './flow'
+import { endRun, finishMission, startEntry } from './flow'
+
+const base = new THREE.Vector3()
+const off = new THREE.Vector3()
+const right = new THREE.Vector3()
+const UP = new THREE.Vector3(0, 1, 0)
+// Formação em "V" (3 caças) e "losango" do enxame (4), em coordenadas relativas ao líder
+const V_FORMATION = [
+  [0, 0, 0],
+  [-7, -1, -6],
+  [7, -1, -6],
+]
+const SWARM = [
+  [0, 0, 0],
+  [-4, 2, -4],
+  [4, 2, -4],
+  [0, 4, -8],
+]
 
 // Marcos de pontuação em que a equipe elogia o jogador
 const MILESTONES = [1000, 3000, 6000, 10000, 15000, 22000]
@@ -28,6 +47,23 @@ export function missionProgress() {
   return { realized, meta: m.indicator.meta, pct: realized / m.indicator.meta, m }
 }
 
+// Faz nascer um inimigo (ou um grupo em formação) num ponto em volta do jogador
+function spawnGroup(type) {
+  const formation = type === 'swarm' ? SWARM : type === 'fighter' && game.missionIndex >= 1 && Math.random() < 0.35 ? V_FORMATION : null
+  if (!formation) {
+    game.spawnEnemy(type)
+    return
+  }
+  spawnAround(base)
+  // Eixos da formação: frente = rumo ao jogador; direita = frente × cima
+  off.subVectors(game.shipPos, base).normalize()
+  right.crossVectors(off, UP).normalize()
+  for (const [x, y, z] of formation) {
+    const p = new THREE.Vector3().copy(base).addScaledVector(right, x).addScaledVector(UP, y).addScaledVector(off, z)
+    game.spawnEnemy(type, { pos: p })
+  }
+}
+
 export default function Director() {
   const s = useRef({
     mission: -1,
@@ -39,6 +75,10 @@ export default function Director() {
     comboSaid: false,
     alarmT: 0,
     hurtTip: false,
+    boundsT: 0,
+    altT: 0,
+    motherQueue: [], // naves-mãe agendadas para a etapa atual: { type, t }
+    stage: '',
     bossStarted: false,
     victoryT: 0,
     half: false,
@@ -59,6 +99,18 @@ export default function Director() {
           break
         case 'newEnemy':
           sayLine('newEnemy_' + ev.enemy, { priority: 2 })
+          break
+        case 'motherArrive':
+          sayLine('motherArrive_' + ev.mother, { priority: 3 })
+          break
+        case 'motherTurret':
+          sayLine('motherTurret', { priority: 1, cooldown: 8 })
+          break
+        case 'motherExposed':
+          sayLine('motherExposed', { priority: 3 })
+          break
+        case 'motherDown':
+          sayLine('motherDown', { priority: 4 })
           break
         case 'deflect':
           sayLine('deflect', { priority: 0, cooldown: 20 })
@@ -124,9 +176,17 @@ export default function Director() {
     const m = MISSIONS[game.missionIndex]
     // Nova missão: zera os gatilhos dela
     if (st.mission !== game.missionIndex) {
-      Object.assign(st, { mission: game.missionIndex, spawnT: 2, tokenT: 1.5, half: false, full: false, super: false, deadline: false, briefed: false })
+      Object.assign(st, { mission: game.missionIndex, spawnT: 2, tokenT: 1.5, half: false, full: false, super: false, deadline: false, briefed: false, stage: '', orbitT: 0 })
     }
-    game.asteroidEvery = m.asteroidEvery
+    // Nova etapa (órbita ou superfície): agenda as naves-mãe dela
+    if (st.stage !== game.stage && game.stage !== 'entry') {
+      st.stage = game.stage
+      st.motherQueue = ((m.motherships || {})[game.stage] || []).map((type, i) => ({ type, t: 7 + i * 16 }))
+      st.spawnT = 2.5
+      st.tokenT = 2
+    }
+    // Durante a cinemática de entrada, nada nasce e o prazo para
+    if (game.stage === 'entry') return
 
     if (!st.briefed) {
       st.briefed = true
@@ -136,9 +196,26 @@ export default function Director() {
       }
     }
 
+    // ---- Naves-mãe agendadas ----
+    for (const q of st.motherQueue) {
+      if (q.t > 0 && (q.t -= dt) <= 0) game.spawnMothership(q.type)
+    }
+
+    // ---- Inimigos (no chefe sobre Fortaleza, quem chama escoltas é a própria fortaleza) ----
+    const bossFight = m.boss && game.stage === 'surface'
+    st.spawnT -= dt
+    const alive = game.enemies.reduce((n, e) => n + (e.active ? 1 : 0), 0)
+    if (!bossFight && st.spawnT <= 0 && alive < m.maxAlive) {
+      spawnGroup(pickType(m.mix))
+      st.spawnT = m.spawnEvery * rand(0.7, 1.3)
+    }
+
     if (m.boss) {
-      // ---- Missão final: chefe ----
-      if (!st.bossStarted) {
+      // ---- Missão final: romper o bloqueio em órbita → atmosfera → chefe sobre Fortaleza ----
+      if (game.stage === 'orbit') {
+        st.orbitT += dt
+        if (game.mstats.orbitKills >= m.orbitKills || st.orbitT > 55) startEntry()
+      } else if (!st.bossStarted) {
         st.bossStarted = true
         game.startBoss()
       }
@@ -149,31 +226,25 @@ export default function Director() {
     } else {
       // ---- Prazo ----
       game.missionTime -= dt
-
-      // ---- Inimigos ----
-      st.spawnT -= dt
-      const alive = game.enemies.reduce((n, e) => n + (e.active ? 1 : 0), 0)
-      if (st.spawnT <= 0 && alive < m.maxAlive) {
-        const type = pickType(m.mix)
-        if (type === 'fighter' && game.missionIndex >= 1 && Math.random() < 0.3) {
-          // Formação em "V" com 3 caças
-          const x = rand(-1, 1) * BOUNDS.x
-          const y = rand(-1, 1) * BOUNDS.y
-          game.spawnEnemy('fighter', { x, y, z: -230 })
-          game.spawnEnemy('fighter', { x: x - 5, y: y - 1, z: -238 })
-          game.spawnEnemy('fighter', { x: x + 5, y: y - 1, z: -238 })
-        } else {
-          game.spawnEnemy(type)
-        }
-        st.spawnT = m.spawnEvery * rand(0.7, 1.3)
+      // Metade do prazo: a frota inimiga desce para o planeta e a esquadrilha vai atrás
+      if (game.stage === 'orbit' && m.surface && game.missionTime <= m.duration / 2) {
+        startEntry()
+        return
       }
 
-      // ---- Cápsulas de meta (missões de coleta) ----
+      // ---- Cápsulas de meta (missões de coleta): aparecem à frente, para o jogador buscar ----
       if (m.tokenEvery) {
         st.tokenT -= dt
         if (st.tokenT <= 0 && game.missionTime > 4) {
           st.tokenT = m.tokenEvery * rand(0.8, 1.2)
-          game.spawnPickup('goal', { x: rand(-1, 1) * BOUNDS.x * 1.15, y: rand(-1, 1) * BOUNDS.y * 1.15, z: -150 })
+          right.crossVectors(game.shipFwd, UP).normalize()
+          base
+            .copy(game.shipPos)
+            .addScaledVector(game.shipFwd, rand(130, 200))
+            .addScaledVector(right, rand(-60, 60))
+            .addScaledVector(UP, rand(-30, 30))
+          if (game.stage === 'surface') base.y = Math.max(base.y, game.ground + 60)
+          game.spawnPickup('goal', base)
         }
       }
 
@@ -201,6 +272,18 @@ export default function Director() {
         finishMission()
         return
       }
+    }
+
+    // ---- Avisos de pilotagem ----
+    st.boundsT -= dt
+    if (game.outOfBounds && st.boundsT <= 0) {
+      st.boundsT = 12
+      sayLine('outOfBounds', { priority: 2 })
+    }
+    st.altT -= dt
+    if (game.lowAltitude && st.altT <= 0) {
+      st.altT = 15
+      sayLine('lowAltitude', { priority: 2 })
     }
 
     // ---- Gatilhos gerais do rádio ----

@@ -8,6 +8,7 @@ import { Lensflare, LensflareElement } from 'three/examples/jsm/objects/Lensflar
 import { game, MISSIONS } from './gameState'
 import { useUI } from './store'
 import { planetUrl, getQuality } from './assets'
+import Surface from './Surface'
 
 const D2R = Math.PI / 180
 
@@ -113,7 +114,7 @@ function loadTex(file, srgb, gl) {
   return p
 }
 
-function useTex(key, srgb = true) {
+export function useTex(key, srgb = true) {
   const { gl } = useThree()
   const [tex, setTex] = useState(null)
   useEffect(() => {
@@ -142,7 +143,7 @@ function useTex(key, srgb = true) {
 // ---------------------------------------------------------------------------
 // Céu: esfera gigante com a Via Láctea (mapa de todo o céu feito pelo satélite Gaia)
 // ---------------------------------------------------------------------------
-function Sky({ rot }) {
+export function Sky({ rot }) {
   const tex = useTex('sky')
   const { scene } = useThree()
   // O mesmo céu serve de mapa de ambiente: reflexos reais nas naves
@@ -184,7 +185,7 @@ function radialTexture(stops, size = 256) {
   return t
 }
 
-function Sun({ dir }) {
+export function Sun({ dir }) {
   const flareRef = useRef()
   const tex = useMemo(
     () => ({
@@ -413,7 +414,7 @@ function SimpleBody({ kind, radius, sun, ring }) {
 }
 
 // Anéis: a textura é uma faixa radial (de dentro para fora); remapeamos as UVs do anel
-function SaturnRing({ radius }) {
+export function SaturnRing({ radius, fog = false }) {
   const tex = useTex('saturnRing')
   const geo = useMemo(() => {
     const g = new THREE.RingGeometry(radius * 1.24, radius * 2.27, 256, 1)
@@ -430,12 +431,12 @@ function SaturnRing({ radius }) {
   if (!tex) return null
   return (
     <mesh geometry={geo} rotation={[-Math.PI / 2, 0, 0]}>
-      <meshStandardMaterial map={tex} transparent side={THREE.DoubleSide} roughness={1} metalness={0} fog={false} depthWrite={false} />
+      <meshStandardMaterial map={tex} transparent side={THREE.DoubleSide} roughness={1} metalness={0} fog={fog} depthWrite={false} />
     </mesh>
   )
 }
 
-function Body({ cfg, sun }) {
+export function Body({ cfg, sun }) {
   const spinRef = useRef()
   useFrame((_, delta) => {
     if (game.phase === 'paused' || game.phase === 'photo') return
@@ -461,7 +462,7 @@ function Body({ cfg, sun }) {
 // ---------------------------------------------------------------------------
 // Luz do Sol (com sombras que acompanham a nave) e luz refletida do planeta
 // ---------------------------------------------------------------------------
-function SunLight({ dir, earthshine }) {
+export function SunLight({ dir, earthshine, sky = '#0a0d18', hemi = 0.55, intensity = 3.6, color = '#fff4e6', ambient = 0.04 }) {
   const light = useRef()
   const target = useMemo(() => new THREE.Object3D(), [])
   useFrame(() => {
@@ -476,8 +477,8 @@ function SunLight({ dir, earthshine }) {
       <directionalLight
         ref={light}
         target={target}
-        intensity={3.6}
-        color="#fff4e6"
+        intensity={intensity}
+        color={color}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.0004}
@@ -490,8 +491,8 @@ function SunLight({ dir, earthshine }) {
         shadow-camera-far={160}
       />
       {/* Luz refletida pelo planeta abaixo (preenche o lado escuro das naves) */}
-      <hemisphereLight args={['#0a0d18', earthshine, 0.55]} />
-      <ambientLight intensity={0.04} />
+      <hemisphereLight args={[sky, earthshine, hemi]} />
+      <ambientLight intensity={ambient} />
     </>
   )
 }
@@ -504,8 +505,27 @@ export function useLocationKey() {
   return MISSIONS[mission]?.location || 'earth'
 }
 
+// Direção da nave até o centro do planeta principal do local atual (usada na entrada na atmosfera)
+let currentKey = 'earth'
+export function planetDirection(out) {
+  const body = LOCATIONS[currentKey].bodies[0]
+  return out.subVectors(body.pos, game.shipPos).normalize()
+}
+
 export default function Space() {
   const key = useLocationKey()
+  const stage = useUI((s) => s.stage)
+  const mission = useUI((s) => s.mission)
+  const phase = useUI((s) => s.phase)
+  currentKey = key
+  // Subfase planetária: troca o espaço pela superfície (céu, solo e nuvens)
+  if (stage === 'surface' && phase !== 'title' && phase !== 'hangar' && MISSIONS[mission]?.surface) {
+    return <Surface key={MISSIONS[mission].surface} kind={MISSIONS[mission].surface} />
+  }
+  return <Orbit locKey={key} />
+}
+
+function Orbit({ locKey: key }) {
   const loc = LOCATIONS[key]
   const sun = useMemo(() => loc.sun.clone().normalize(), [loc])
   return (

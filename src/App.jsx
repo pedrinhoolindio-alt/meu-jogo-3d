@@ -13,7 +13,7 @@ import Wingmen from './Wingmen'
 import Lasers from './Lasers'
 import EnemyLasers from './EnemyLasers'
 import Enemies from './Enemies'
-import Asteroids from './Asteroids'
+import Motherships from './Motherships'
 import Pickups from './Pickups'
 import Boss from './Boss'
 import Explosions from './Explosions'
@@ -22,7 +22,7 @@ import Effects from './Effects'
 import Hud from './ui/Hud'
 import Radio from './ui/Radio'
 import Screens from './ui/Screens'
-import { game, BOUNDS } from './gameState'
+import { game } from './gameState'
 import { ui, useUI } from './store'
 import { startGame, togglePause, togglePhoto } from './flow'
 import { toggleMute, handleUploadedAudioFiles } from './audio'
@@ -34,8 +34,15 @@ function useInput() {
   useEffect(() => {
     const playing = () => game.phase === 'playing'
 
+    // Teclas de pilotagem: ao usá-las, o mouse deixa de pilotar até ser mexido de novo
+    const STEER = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
     const onKeyDown = (e) => {
       game.keys[e.code] = true
+      if (STEER.has(e.code)) {
+        game.mouseActive = false
+        if (e.code.startsWith('Arrow')) e.preventDefault()
+      }
+      if (e.code === 'KeyV') game.lookBack = true
       if (e.code === 'Space') {
         e.preventDefault()
         if (playing()) game.wantsToFire = true
@@ -53,22 +60,27 @@ function useInput() {
     }
     const onKeyUp = (e) => {
       game.keys[e.code] = false
+      if (e.code === 'KeyV') game.lookBack = false
       if (e.code === 'Space') game.wantsToFire = false
     }
 
-    // Converte o mouse de pixels para coordenadas normalizadas (-1..1)
-    // e mapeia direto para o "quadrado" de movimento da nave.
+    // Converte o mouse de pixels para coordenadas normalizadas (-1..1).
+    // No voo livre ele é um JOYSTICK VIRTUAL: o centro da tela = reto; para os lados = virar.
     const onMouseMove = (e) => {
-      if (!playing()) return
+      if (e.pointerType === 'touch' || e.sourceCapabilities?.firesTouchEvents) return
       const nx = (e.clientX / window.innerWidth) * 2 - 1 // esquerda -1 → direita +1
       const ny = -((e.clientY / window.innerHeight) * 2 - 1) // baixo -1 → cima +1 (Y da tela é invertido)
-      game.target.set(nx * BOUNDS.x, ny * BOUNDS.y)
+      game.mouse.set(nx, ny)
+      if (playing()) game.mouseActive = true
     }
+    // Mouse saiu da janela: para de pilotar com ele
+    const onMouseLeave = () => (game.mouseActive = false)
 
+    // Toque: arrastar na tela funciona como joystick a partir do ponto onde o dedo encostou
     let isScreenDragging = false
     let dragPointerId = null
-    let lastTouchX = 0
-    let lastTouchY = 0
+    let startTouchX = 0
+    let startTouchY = 0
 
     const onPointerDown = (e) => {
       if (e.pointerType !== 'touch') return
@@ -77,27 +89,25 @@ function useInput() {
       if (!playing()) return
       isScreenDragging = true
       dragPointerId = e.pointerId
-      lastTouchX = e.clientX
-      lastTouchY = e.clientY
+      startTouchX = e.clientX
+      startTouchY = e.clientY
     }
 
     const onPointerMove = (e) => {
       if (e.pointerType !== 'touch') return
       if (!isScreenDragging || e.pointerId !== dragPointerId || !playing()) return
-      const dx = e.clientX - lastTouchX
-      const dy = e.clientY - lastTouchY
-      lastTouchX = e.clientX
-      lastTouchY = e.clientY
-      const scaleX = (BOUNDS.x * 2.2) / window.innerWidth
-      const scaleY = (BOUNDS.y * 2.2) / window.innerHeight
-      game.target.x = Math.max(-BOUNDS.x, Math.min(BOUNDS.x, game.target.x + dx * scaleX))
-      game.target.y = Math.max(-BOUNDS.y, Math.min(BOUNDS.y, game.target.y - dy * scaleY))
+      // 90 px de arrasto = curva máxima
+      const clamp1 = (v) => Math.max(-1, Math.min(1, v))
+      game.stickX = clamp1((e.clientX - startTouchX) / 90)
+      game.stickY = clamp1(-(e.clientY - startTouchY) / 90)
     }
 
     const onPointerUp = (e) => {
       if (e.pointerId === dragPointerId) {
         isScreenDragging = false
         dragPointerId = null
+        game.stickX = 0
+        game.stickY = 0
       }
     }
 
@@ -117,12 +127,14 @@ function useInput() {
     const onVisibility = () => {
       if (document.hidden && playing()) togglePause()
       game.keys = {}
+      game.lookBack = false
       if (!game.autoFire) game.wantsToFire = false
     }
 
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     window.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseleave', onMouseLeave)
     window.addEventListener('pointerdown', onPointerDown)
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
@@ -135,6 +147,7 @@ function useInput() {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseleave', onMouseLeave)
       window.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
@@ -154,6 +167,7 @@ function OrbitCamera() {
   const { camera } = useThree()
   useEffect(() => {
     if (!active) return
+    camera.up.set(0, 1, 0) // a perseguição inclina o "teto" da câmera; a órbita precisa dele reto
     camera.fov = 55
     camera.updateProjectionMatrix()
   }, [active, camera])
@@ -197,7 +211,7 @@ function World() {
       <Missiles />
       <EnemyLasers />
       <Enemies />
-      <Asteroids />
+      <Motherships />
       <Pickups />
       <Boss />
       <Explosions />

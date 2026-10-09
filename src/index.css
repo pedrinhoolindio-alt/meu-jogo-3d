@@ -1692,3 +1692,177 @@ kbd {
   margin: 0;
 }
 
+
+/* ------------------------------------------------ VOO LIVRE 360°: radar e marcadores */
+.trk-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.trk {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+.trk span {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translate(-50%, 3px);
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  text-shadow: 0 0 4px #000;
+}
+/* Colchetes nos cantos (4 gradientes lineares, um por canto) */
+.trk.box {
+  background:
+    linear-gradient(currentColor, currentColor) top left / 30% 2px no-repeat,
+    linear-gradient(currentColor, currentColor) top left / 2px 30% no-repeat,
+    linear-gradient(currentColor, currentColor) top right / 30% 2px no-repeat,
+    linear-gradient(currentColor, currentColor) top right / 2px 30% no-repeat,
+    linear-gradient(currentColor, currentColor) bottom left / 30% 2px no-repeat,
+    linear-gradient(currentColor, currentColor) bottom left / 2px 30% no-repeat,
+    linear-gradient(currentColor, currentColor) bottom right / 30% 2px no-repeat,
+    linear-gradient(currentColor, currentColor) bottom right / 2px 30% no-repeat;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 3px currentColor);
+}
+.trk.box.locked {
+  opacity: 1;
+  outline: 1px dashed currentColor;
+  outline-offset: 3px;
+}
+/* Seta de inimigo fora da tela: triângulo apontando para a direita, girado pelo JS */
+.trk.arrow {
+  width: 24px;
+  height: 24px;
+  background: currentColor;
+  clip-path: polygon(100% 50%, 15% 12%, 35% 50%, 15% 88%);
+  opacity: 0.9;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+.trk.arrow.big {
+  width: 34px;
+  height: 34px;
+}
+
+.deadzone {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14vmin;
+  height: 14vmin;
+  transform: translate(-50%, -50%);
+  border: 1px dashed rgba(124, 243, 255, 0.25);
+  border-radius: 50%;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.mouse-dot {
+  position: absolute;
+  left: -9px;
+  top: -9px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(124, 243, 255, 0.85);
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 8px rgba(124, 243, 255, 0.6);
+}
+
+.radar-wrap {
+  position: absolute;
+  right: 22px;
+  top: 74px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+.radar {
+  width: 156px;
+  height: 156px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(8, 30, 48, 0.55), rgba(4, 12, 22, 0.75));
+  border: 1px solid rgba(124, 243, 255, 0.45);
+  box-shadow: 0 0 16px rgba(60, 160, 255, 0.25);
+}
+.radar-info {
+  margin-top: 4px;
+  text-align: center;
+  font-family: var(--font-display);
+  letter-spacing: 2px;
+  text-shadow: 0 0 6px #000;
+}
+.radar-info .loc {
+  font-size: 11px;
+  color: #7cf3ff;
+}
+.radar-info .alt-spd {
+  font-size: 10px;
+  color: #cfe6ff;
+}
+.look-back {
+  position: absolute;
+  top: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  letter-spacing: 3px;
+  color: #ffd84a;
+  text-shadow: 0 0 8px #000;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.flight-warn {
+  margin-top: 10px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: #ffb020;
+  text-shadow: 0 0 8px rgba(255, 120, 0, 0.8);
+  animation: blinkWarn 0.8s steps(2) infinite;
+}
+@keyframes blinkWarn {
+  50% {
+    opacity: 0.35;
+  }
+}
+.map-attrib {
+  position: absolute;
+  right: 8px;
+  bottom: 4px;
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.65);
+  text-shadow: 0 0 3px #000;
+  pointer-events: none;
+}
+/* Clarão da reentrada na atmosfera */
+.entry-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 6;
+  background: radial-gradient(circle at 50% 45%, #fff6e8 0%, #ffd29a 35%, #ff8a3a 75%, #c2410f 100%);
+}
+
+@media (max-width: 860px) {
+  .radar-wrap {
+    right: 12px;
+    top: 64px;
+  }
+  .radar {
+    width: 112px;
+    height: 112px;
+  }
+  .deadzone,
+  .mouse-dot {
+    display: none;
+  }
+}

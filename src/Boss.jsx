@@ -1,10 +1,11 @@
 // src/Boss.jsx
-// Chefe final: Fortaleza Korrath.
+// Chefe final: Fortaleza Korrath, no céu de Fortaleza-CE ao amanhecer.
 // Fase 1: 4 torres protegem o núcleo (que tem escudo). Fase 2: núcleo exposto, rajadas radiais.
+// Voo livre: a fortaleza sempre gira a "face" (+Z, onde ficam torres e núcleo) para o jogador.
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { game, frameDt, rand, damp, segmentSphere, addScore } from './gameState'
+import { game, frameDt, rand, damp, segmentSphere, addScore, damagePlayer } from './gameState'
 import { M, Ship } from './models'
 import { sfx } from './audio'
 
@@ -18,10 +19,13 @@ const TURRET_OFFSETS = [
 const CORE_OFFSET = new THREE.Vector3(0, 0, 4.6)
 const TURRET_HP = 28
 const CORE_HP = 150
-const HOLD = new THREE.Vector3(0, 2, -75) // posição de combate (mais perto = chefe maior na tela)
-
 const world = new THREE.Vector3()
 const dir = new THREE.Vector3()
+const local = new THREE.Vector3()
+const UP = new THREE.Vector3(0, 1, 0)
+const look = new THREE.Matrix4()
+const qLook = new THREE.Quaternion()
+const FLIP = new THREE.Quaternion().setFromAxisAngle(UP, Math.PI)
 
 export default function Boss() {
   const group = useRef()
@@ -48,9 +52,15 @@ export default function Boss() {
       active: false,
       state: 'idle', // idle | enter | fight | dying
       pos: new THREE.Vector3(0, 8, -480),
+      anchor: new THREE.Vector3(), // centro do "oito" que a fortaleza descreve
+      quat: new THREE.Quaternion(),
+      inv: new THREE.Quaternion(),
+      vel: new THREE.Vector3(),
       t: 0,
       coreOffset: CORE_OFFSET,
-      turrets: TURRET_OFFSETS.map((o) => ({ offset: o, hp: TURRET_HP, alive: true, fireT: rand(1, 2.5) })),
+      turrets: TURRET_OFFSETS.map((o) => ({ offset: o, hp: TURRET_HP, alive: true, fireT: rand(1, 2.5), pos: new THREE.Vector3() })),
+      core: { pos: new THREE.Vector3() },
+      targets: [],
       coreHp: CORE_HP,
       maxHp: TURRET_HP * 4 + CORE_HP,
       burstT: 2.5,
@@ -74,7 +84,7 @@ export default function Boss() {
   function hitTurret(tu, dmg, owner) {
     tu.hp -= dmg
     if (owner === 'player') game.stats.hits++
-    world.copy(boss.pos).add(tu.offset)
+    world.copy(tu.pos)
     game.fx.sparks(world, 'orange', 6)
     sfx.hitEnemy()
     if (tu.hp <= 0 && tu.alive) {
@@ -91,7 +101,7 @@ export default function Boss() {
   function hitCore(dmg, owner) {
     boss.coreHp -= dmg
     if (owner === 'player') game.stats.hits++
-    world.copy(boss.pos).add(CORE_OFFSET)
+    world.copy(boss.core.pos)
     game.fx.sparks(world, 'orange', 8)
     sfx.hitEnemy()
     if (boss.coreHp <= 0 && boss.state === 'fight') {
@@ -104,28 +114,44 @@ export default function Boss() {
     }
   }
 
+  // Alvos (mira automática, mísseis, alas, bombas): torres e, sem torres, o núcleo
+  useMemo(() => {
+    boss.targets = boss.turrets.map((tu) => ({
+      pos: tu.pos,
+      vel: boss.vel,
+      r: 2.6,
+      kind: 'boss',
+      get alive() {
+        return tu.alive
+      },
+      hit: (d, o) => tu.alive && hitTurret(tu, d, o),
+    }))
+    boss.targets.push({
+      pos: boss.core.pos,
+      vel: boss.vel,
+      r: 3,
+      kind: 'boss',
+      get alive() {
+        return !anyTurret() && boss.coreHp > 0
+      },
+      hit: (d, o) => hitCore(d, o),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boss])
+
   useEffect(() => {
     game.boss = boss
     game.startBoss = () => {
       boss.active = true
       boss.state = 'enter'
       boss.t = 0
-      boss.pos.set(0, 8, -480)
+      // Surge longe, à frente do jogador, e se aproxima até a distância de combate
+      boss.anchor.copy(game.shipPos).addScaledVector(game.shipFwd, 190)
+      boss.anchor.y = Math.max(boss.anchor.y, game.ground + 260)
+      boss.pos.copy(game.shipPos).addScaledVector(game.shipFwd, 700)
+      boss.pos.y = boss.anchor.y + 120
     }
-    // Dano em área (bomba)
-    game.damageBossArea = (p, r, dmg) => {
-      if (!boss.active || boss.state !== 'fight') return
-      const r2 = r * r
-      for (const tu of boss.turrets) {
-        if (!tu.alive) continue
-        world.copy(boss.pos).add(tu.offset)
-        if (world.distanceToSquared(p) < r2) hitTurret(tu, dmg, 'player')
-      }
-      if (!anyTurret()) {
-        world.copy(boss.pos).add(CORE_OFFSET)
-        if (world.distanceToSquared(p) < r2) hitCore(dmg, 'player')
-      }
-    }
+    game.damageBossArea = () => {} // (dano em área agora passa por damageArea/collectTargets)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boss])
 
@@ -136,17 +162,26 @@ export default function Boss() {
     if (!boss.active || !dt) return
     boss.t += dt
 
+    // A fortaleza gira devagar para encarar o jogador (slerp até a rotação de "olhar")
+    look.lookAt(boss.pos, game.shipPos, UP)
+    qLook.setFromRotationMatrix(look).multiply(FLIP) // lookAt aponta −Z; a face da fortaleza é +Z
+    boss.quat.slerp(qLook, damp(boss.state === 'enter' ? 2 : 0.5, dt))
+    boss.inv.copy(boss.quat).invert()
+    const prevX = boss.pos.x
+    const prevY = boss.pos.y
+    const prevZ = boss.pos.z
+
     if (boss.state === 'enter') {
-      // Entrada: desliza do fundo até a posição de combate (invulnerável)
-      boss.pos.lerp(HOLD, damp(0.7, dt))
+      // Entrada: desce do céu até a posição de combate (invulnerável)
+      boss.pos.lerp(boss.anchor, damp(0.7, dt))
       if (boss.t > 6) {
         boss.state = 'fight'
         boss.t = 0
       }
     } else if (boss.state === 'fight') {
       const t = boss.t
-      // Movimento em "oito": x = sen(0,35t)·9, y = sen(0,6t)·3
-      boss.pos.set(Math.sin(t * 0.35) * 8, Math.sin(t * 0.6) * 3 + HOLD.y, HOLD.z + Math.sin(t * 0.4) * 5)
+      // Movimento em "oito" em volta da âncora: x = sen(0,35t)·40, y = sen(0,6t)·12, z = sen(0,7t)·30
+      boss.pos.set(boss.anchor.x + Math.sin(t * 0.35) * 40, boss.anchor.y + Math.sin(t * 0.6) * 12, boss.anchor.z + Math.sin(t * 0.7) * 30)
       const turretsUp = anyTurret()
 
       // ---- Ataques ----
@@ -154,23 +189,22 @@ export default function Boss() {
         if (!tu.alive) continue
         tu.fireT -= dt
         if (tu.fireT <= 0) {
-          world.copy(boss.pos).add(tu.offset)
-          world.z += 1.5
-          dir.subVectors(game.shipPos, world)
-          dir.x += rand(-1, 1)
-          game.fireEnemyLaser(world, dir, 62, 'bolt')
+          // Mira no ponto previsto da nave: alvo + velocidade · (distância / 70)
+          dir.copy(game.shipPos).addScaledVector(game.shipVel, tu.pos.distanceTo(game.shipPos) / 70 * 0.7).sub(tu.pos)
+          dir.x += rand(-2, 2)
+          game.fireEnemyLaser(tu.pos, dir, 70, 'bolt')
           tu.fireT = rand(1.0, 1.6)
         }
       }
       if (!turretsUp) {
-        world.copy(boss.pos).add(CORE_OFFSET)
-        // Rajada radial: 16 bolas em anel (cos, sen) inclinadas para +Z
+        world.copy(boss.core.pos)
+        // Rajada radial: 16 bolas em anel (cos, sen) inclinadas para a frente (+Z local → mundo)
         boss.burstT -= dt
         if (boss.burstT <= 0) {
           for (let k = 0; k < 16; k++) {
             const a = (k / 16) * Math.PI * 2 + t
-            dir.set(Math.cos(a) * 0.32, Math.sin(a) * 0.22, 1)
-            game.fireEnemyLaser(world, dir, 40, 'plasma')
+            dir.set(Math.cos(a) * 0.45, Math.sin(a) * 0.35, 1).applyQuaternion(boss.quat)
+            game.fireEnemyLaser(world, dir, 45, 'plasma')
           }
           boss.burstT = 2.3
         }
@@ -189,9 +223,12 @@ export default function Boss() {
       boss.escortT -= dt
       if (boss.escortT <= 0) {
         const alive = game.enemies.reduce((n, e) => n + (e.active ? 1 : 0), 0)
-        if (alive < 4) {
-          game.spawnEnemy('fighter', { x: boss.pos.x - 22, y: boss.pos.y, z: boss.pos.z - 10 })
-          game.spawnEnemy('fighter', { x: boss.pos.x + 22, y: boss.pos.y, z: boss.pos.z - 10 })
+        if (alive < 6) {
+          for (const sx of [-1, 1]) {
+            world.set(sx * 24, 0, -6).applyQuaternion(boss.quat).add(boss.pos)
+            dir.set(sx, 0, 1).applyQuaternion(boss.quat)
+            game.spawnEnemy(Math.random() < 0.5 ? 'fighter' : 'ace', { pos: world, dir })
+          }
         }
         boss.escortT = turretsUp ? 11 : 8
       }
@@ -206,8 +243,7 @@ export default function Boss() {
         let hit = false
         for (const tu of boss.turrets) {
           if (!tu.alive) continue
-          world.copy(boss.pos).add(tu.offset)
-          if (segmentSphere(l.prev, l.pos, world, 2.4)) {
+          if (segmentSphere(l.prev, l.pos, tu.pos, 2.6)) {
             l.active = false
             hitTurret(tu, l.dmg, l.owner)
             hit = true
@@ -215,8 +251,7 @@ export default function Boss() {
           }
         }
         if (hit) continue
-        world.copy(boss.pos).add(CORE_OFFSET)
-        if (segmentSphere(l.prev, l.pos, world, turretsUp ? 3.8 : 2.8)) {
+        if (segmentSphere(l.prev, l.pos, boss.core.pos, turretsUp ? 3.8 : 3)) {
           l.active = false
           if (turretsUp) {
             game.fx.sparks(l.pos, 'blue', 5) // escudo absorve
@@ -226,22 +261,28 @@ export default function Boss() {
           }
           continue
         }
-        // Casco (caixa aproximada): bloqueia o tiro
-        if (Math.abs(l.pos.x - boss.pos.x) < 19 && Math.abs(l.pos.y - boss.pos.y) < 14 && Math.abs(l.pos.z - boss.pos.z) < 5.5) {
+        // Casco (caixa no espaço LOCAL da fortaleza): bloqueia o tiro
+        local.subVectors(l.pos, boss.pos).applyQuaternion(boss.inv)
+        if (Math.abs(local.x) < 19 && Math.abs(local.y) < 14 && Math.abs(local.z) < 5.5) {
           l.active = false
           game.fx.sparks(l.pos, 'orange', 3)
         }
+      }
+      // Encostar no casco machuca e empurra a nave para fora
+      local.subVectors(game.shipPos, boss.pos).applyQuaternion(boss.inv)
+      if (Math.abs(local.x) < 21 && Math.abs(local.y) < 16 && Math.abs(local.z) < 7.5) {
+        damagePlayer(30, 'ram')
+        game.shipPos.addScaledVector(dir.subVectors(game.shipPos, boss.pos).normalize(), 4)
       }
     } else if (boss.state === 'dying') {
       // Sequência de explosões, câmera lenta e explosão final
       boss.dyingT += dt
       if (boss.dyingT > 0.6) game.timeScale = 1
-      boss.pos.y -= dt * 2
-      g.rotation.z += dt * 0.3
+      boss.pos.y -= dt * 6 // despenca sobre o mar de Fortaleza
       boss.boomT -= dt
       if (boss.boomT <= 0) {
         boss.boomT = 0.12
-        world.set(boss.pos.x + rand(-18, 18), boss.pos.y + rand(-13, 13), boss.pos.z + rand(0, 6))
+        world.set(rand(-18, 18), rand(-13, 13), rand(0, 6)).applyQuaternion(boss.quat).add(boss.pos)
         game.fx.explode(world, { size: rand(1, 2.2) })
         sfx.explosion(false)
         game.shake = Math.max(game.shake, 0.5)
@@ -258,8 +299,16 @@ export default function Boss() {
       }
     }
 
+    // Velocidade (para a previsão de tiro dos alas/mísseis)
+    if (dt > 0) boss.vel.set((boss.pos.x - prevX) / dt, (boss.pos.y - prevY) / dt, (boss.pos.z - prevZ) / dt)
+    // Posições das peças no mundo: mundo = posição + rotação · deslocamento local
+    for (const tu of boss.turrets) tu.pos.copy(tu.offset).applyQuaternion(boss.quat).add(boss.pos)
+    boss.core.pos.copy(CORE_OFFSET).applyQuaternion(boss.quat).add(boss.pos)
+
     g.position.copy(boss.pos)
-    if (boss.state !== 'dying') g.rotation.z = Math.sin(boss.t * 0.5) * 0.05
+    g.quaternion.copy(boss.quat)
+    if (boss.state === 'dying') g.rotateZ(boss.dyingT * 0.3)
+    else g.rotateZ(Math.sin(boss.t * 0.5) * 0.05)
 
     // Visual das torres, escudo e núcleo pulsante
     boss.turrets.forEach((tu, i) => (turretRefs.current[i].visible = tu.alive))

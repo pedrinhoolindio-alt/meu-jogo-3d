@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { game, CONFIG, frameDt, segmentSphere, ENEMY_TYPES, rand } from './gameState'
+import { game, CONFIG, frameDt, segmentSphere, rand, bestTarget, collectTargets, damageArea } from './gameState'
 import { sfx } from './audio'
 
 const MAX = 16
@@ -12,36 +12,14 @@ const tmp = new THREE.Vector3()
 const want = new THREE.Vector3()
 const dummy = new THREE.Object3D()
 const prev = new THREE.Vector3()
-const bossPart = new THREE.Vector3()
+const side = new THREE.Vector3()
 
-// Procura o alvo mais ameaçador à frente: o mais próximo da nave (ou uma peça viva do chefe)
-function acquire(from) {
-  let best = null
-  let bestD = Infinity
-  for (const e of game.enemies) {
-    if (!e.active || e.pos.z > from.z + 2 || e.pos.z < -200) continue
-    const d = e.pos.distanceToSquared(from)
-    if (d < bestD) {
-      bestD = d
-      best = { kind: 'enemy', ref: e }
-    }
-  }
-  const b = game.boss
-  if (!best && b && b.active && b.state === 'fight') {
-    const t = b.turrets.findIndex((q) => q.alive)
-    best = { kind: 'boss', turret: t }
-  }
-  return best
+// Procura o alvo: o mais centralizado à frente (cone de 60°); se não houver, o mais perto em volta
+function acquire(from, dir) {
+  return bestTarget(from, dir, 0.5, 520) || bestTarget(from, dir, -1, 380)
 }
-
-function targetPos(t, out) {
-  if (!t) return null
-  if (t.kind === 'enemy') return t.ref.active ? out.copy(t.ref.pos) : null
-  const b = game.boss
-  if (!b || !b.active || b.state !== 'fight') return null
-  if (t.turret >= 0 && b.turrets[t.turret].alive) return out.copy(b.pos).add(b.turrets[t.turret].offset)
-  return out.copy(b.pos).add(b.coreOffset)
-}
+// Um alvo continua válido enquanto estiver "vivo" (caça ativo, peça intacta)
+const valid = (t) => t && (t.kind === 'enemy' ? t.ref.active : t.alive)
 
 export default function Missiles() {
   const mesh = useRef()
@@ -65,15 +43,16 @@ export default function Missiles() {
 
   function launch() {
     if (game.missiles <= 0) return
-    // Dois mísseis, um de cada asa
-    for (const side of [-1, 1]) {
+    // Dois mísseis, um de cada asa (eixos LOCAIS da nave levados para o mundo)
+    for (const s of [-1, 1]) {
       const m = pool.find((q) => !q.active)
       if (!m) break
       m.active = true
-      m.pos.set(game.shipPos.x + side * 1.6, game.shipPos.y - 0.4, game.shipPos.z - 1)
-      // Sai para o lado e para a frente; depois o guiamento corrige o rumo
-      m.vel.set(side * 18, 6, -CONFIG.missileSpeed * 0.6)
-      m.target = acquire(m.pos)
+      side.set(s, 0, 0).applyQuaternion(game.shipQuat)
+      m.pos.copy(game.shipPos).addScaledVector(side, 1.6).addScaledVector(game.shipUp, -0.4)
+      // Sai para o lado e para a frente (somando a velocidade da nave); depois o guiamento corrige o rumo
+      m.vel.copy(game.shipVel).addScaledVector(side, 18).addScaledVector(game.shipUp, 6).addScaledVector(game.shipFwd, CONFIG.missileSpeed * 0.4)
+      m.target = acquire(game.shipPos, game.shipFwd)
       m.life = 0
       m.trailT = 0
     }
@@ -85,13 +64,8 @@ export default function Missiles() {
     m.active = false
     game.fx.explode(m.pos, { size: 1.1 })
     sfx.explosion(false)
-    // Dano em área pequena
-    for (const e of game.enemies) {
-      if (!e.active) continue
-      const r = ENEMY_TYPES[e.type].radius + 4
-      if (e.pos.distanceToSquared(m.pos) < r * r) game.damageEnemy(e, 7, 'player')
-    }
-    game.damageBossArea(m.pos, 7, 9)
+    // Dano em área pequena (caças, peças de nave-mãe e do chefe)
+    damageArea(m.pos, 4, 7)
   }
 
   useEffect(() => {
@@ -113,18 +87,17 @@ export default function Missiles() {
       const m = pool[i]
       if (m.active) {
         m.life += dt
-        if (!m.target || !targetPos(m.target, tmp)) {
-          m.target = acquire(m.pos)
-        }
-        const has = m.target && targetPos(m.target, tmp)
+        if (!valid(m.target)) m.target = acquire(m.pos, tmp.copy(m.vel).normalize())
+        const has = valid(m.target)
+        if (has) tmp.copy(m.target.pos)
         // Guiamento: gira o vetor velocidade em direção ao alvo, com limite de curva (missileTurn)
         //   desejado = (alvo - posição) normalizado × velocidade; vel = lerp(vel, desejado, k)
         if (has && m.life > 0.18) {
           want.subVectors(tmp, m.pos).normalize().multiplyScalar(CONFIG.missileSpeed)
           m.vel.lerp(want, Math.min(1, CONFIG.missileTurn * dt))
         } else {
-          want.set(0, 0, -CONFIG.missileSpeed)
-          m.vel.lerp(want, Math.min(1, 2 * dt))
+          // Sem alvo: segue reto, acelerando até a velocidade de cruzeiro
+          m.vel.setLength(Math.min(CONFIG.missileSpeed, m.vel.length() + 60 * dt))
         }
         prev.copy(m.pos)
         m.pos.addScaledVector(m.vel, dt)
@@ -134,16 +107,14 @@ export default function Missiles() {
           m.trailT = 0.03
           game.fx.sparks(m.pos, 'smoke', 1)
         }
-        // Colisão com inimigos
-        for (const e of game.enemies) {
-          if (!e.active) continue
-          if (segmentSphere(prev, m.pos, e.pos, ENEMY_TYPES[e.type].radius + 0.6)) {
+        // Colisão com qualquer alvo
+        for (const t of collectTargets()) {
+          if (segmentSphere(prev, m.pos, t.pos, t.r + 0.6)) {
             explode(m)
             break
           }
         }
-        if (m.active && has && m.target.kind === 'boss' && m.pos.distanceToSquared(tmp) < 9) explode(m)
-        if (m.active && (m.life > 4 || m.pos.z < -260)) explode(m)
+        if (m.active && m.life > 5) explode(m)
       }
       if (m.active) {
         dummy.position.copy(m.pos)
@@ -165,21 +136,20 @@ export default function Missiles() {
     if (game.droneTime > 0 && game.phase === 'playing') {
       game.droneTime -= dt
       droneState.angle += dt * 2.2
-      // Órbita circular em volta da nave: (cos, sen) × raio
-      droneState.pos.set(
-        game.shipPos.x + Math.cos(droneState.angle) * 3.4,
-        game.shipPos.y + 1.2 + Math.sin(droneState.angle * 2) * 0.5,
-        game.shipPos.z + Math.sin(droneState.angle) * 2
-      )
+      // Órbita circular em volta da nave, no referencial dela: (cos, sen) × raio → gira com a nave
+      droneState.pos
+        .set(Math.cos(droneState.angle) * 3.4, 1.2 + Math.sin(droneState.angle * 2) * 0.5, Math.sin(droneState.angle) * 2)
+        .applyQuaternion(game.shipQuat)
+        .add(game.shipPos)
       d.visible = true
       d.position.copy(droneState.pos)
       d.rotation.y += dt * 4
       // Atira sozinho no alvo mais próximo
       droneState.fireT -= dt
       if (droneState.fireT <= 0) {
-        const t = acquire(droneState.pos)
-        if (t && targetPos(t, tmp)) {
-          want.subVectors(tmp, droneState.pos).normalize()
+        const t = bestTarget(droneState.pos, game.shipFwd, 0.3, 280)
+        if (t) {
+          want.subVectors(t.pos, droneState.pos).normalize()
           game.firePlayerLaser(droneState.pos, want, { owner: 'drone', dmg: 0.8, color: new THREE.Color(0.4, 3, 3.2) })
           sfx.wingLaser()
         }

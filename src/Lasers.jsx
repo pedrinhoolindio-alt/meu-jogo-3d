@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { game, CONFIG, CANNONS, frameDt } from './gameState'
+import { game, CONFIG, CANNONS, frameDt, damageArea, collectTargets } from './gameState'
 import { sfx } from './audio'
 
 const MAX = 160 // tamanho do pool (máximo de lasers simultâneos)
@@ -78,9 +78,6 @@ export default function Lasers() {
     }
   }, [pool])
 
-  // Ângulo de desvio (radianos) para os tiros do leque, em torno do eixo Y
-  const spreadQ = useMemo(() => [-0.09, 0.09].map((a) => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), a)), [])
-
   function fireFromShip() {
     const lvl = game.weaponLevel
     // Nível 0: pares alternados (cima/baixo). Nível 1+: os 4 canhões juntos.
@@ -105,7 +102,8 @@ export default function Lasers() {
     if (lvl >= 3) {
       for (let k = 0; k < 2; k++) {
         origin.copy(CANNONS[k]).applyQuaternion(game.shipQuat).add(game.shipPos)
-        dir.subVectors(game.aim, origin).normalize().applyQuaternion(spreadQ[k]) // asa direita abre para a direita (ângulo negativo em Y)
+        // Gira a direção em torno do "teto" da nave: asa direita abre para a direita (ângulo negativo)
+        dir.subVectors(game.aim, origin).normalize().applyAxisAngle(game.shipUp, k === 0 ? -0.09 : 0.09)
         game.firePlayerLaser(origin, dir, { ...opts, dmg: opts.dmg * 0.8 })
       }
     }
@@ -119,10 +117,8 @@ export default function Lasers() {
     game.fx.shockwave(p, 5)
     game.shake = 1.4
     sfx.bomb()
-    const r2 = CONFIG.bombRadius * CONFIG.bombRadius
-    for (const e of game.enemies) if (e.active && e.pos.distanceToSquared(p) < r2) game.damageEnemy(e, 25, 'player')
-    for (const a of game.asteroids) if (a.active && a.pos.distanceToSquared(p) < r2) game.destroyAsteroid(a, 'player')
-    game.damageBossArea(p, CONFIG.bombRadius + 12, 22)
+    // Atinge caças, peças das naves-mãe e do chefe dentro do raio
+    damageArea(p, CONFIG.bombRadius, 25)
     game.clearEnemyLasers()
   }
 
@@ -145,8 +141,8 @@ export default function Lasers() {
       if (playing && game.bombs > 0 && !bomb.active) {
         game.bombs--
         bomb.active = true
-        bomb.pos.copy(game.shipPos)
-        bomb.pos.z -= 2
+        // Sai pelo nariz e voa na direção da mira
+        bomb.pos.copy(game.shipPos).addScaledVector(game.shipFwd, 3)
         bomb.dir.subVectors(game.aim, bomb.pos).normalize()
         bomb.traveled = 0
         sfx.bombLaunch()
@@ -156,16 +152,17 @@ export default function Lasers() {
       const step = 95 * dt
       bomb.pos.addScaledVector(bomb.dir, step)
       bomb.traveled += step
-      let boom = bomb.traveled >= 58
+      // Explode ao chegar a 80 unidades ou ao encostar em qualquer alvo
+      let boom = bomb.traveled >= 80
       if (!boom) {
-        for (const e of game.enemies) {
-          if (e.active && e.pos.distanceToSquared(bomb.pos) < 20) {
+        for (const t of collectTargets()) {
+          const r = t.r + 3
+          if (t.pos.distanceToSquared(bomb.pos) < r * r) {
             boom = true
             break
           }
         }
       }
-      if (!boom && game.boss && game.boss.active && game.boss.pos.distanceToSquared(bomb.pos) < 300) boom = true
       if (boom) detonate(bomb.pos.clone())
     }
     bombMesh.current.visible = bomb.active

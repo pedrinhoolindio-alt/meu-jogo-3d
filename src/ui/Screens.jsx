@@ -5,7 +5,7 @@ import { useUI } from '../store'
 import { startGame, togglePause, toMenu, startMission, nextMission, openHangar, closeHangar, togglePhoto } from '../flow'
 import { getQuality, setQuality } from '../assets'
 import { LOCATIONS } from '../Space'
-import { MISSIONS } from '../gameState'
+import { MISSIONS, MOTHERSHIP_TYPES } from '../gameState'
 import { CAST } from '../characters'
 import { playIntro } from '../audio'
 import Portrait from './Portrait'
@@ -16,7 +16,9 @@ export const ORG_COLORS = { SESC: '#e8402f', SENAC: '#2f8fff', FECOMÉRCIO: '#2f
 function Controls() {
   return (
     <div className="controls">
-      <div><kbd>Mouse</kbd> / <kbd>WASD</kbd> ou <b>Joystick Touch</b> mover</div>
+      <div><kbd>Mouse</kbd> pilotar (aponte para onde quer virar) · voo livre 360°</div>
+      <div><kbd>W</kbd> <kbd>S</kbd> subir/descer · <kbd>A</kbd> <kbd>D</kbd> virar · <b>Joystick Touch</b></div>
+      <div><kbd>V</kbd> olhar para trás · radar e setas mostram inimigos em volta</div>
       <div><kbd>Clique</kbd> / <kbd>Espaço</kbd> ou <b>Botão TIRO</b> atirar</div>
       <div><kbd>Shift</kbd> ou <b>Botão TURBO</b> acelerar</div>
       <div><kbd>Q</kbd> <kbd>E</kbd> ou <b>Botão GIRO</b> esquiva (rebate lasers)</div>
@@ -197,6 +199,20 @@ function Briefing() {
             <span>BÔNUS</span>
             <b>{m.bonus.label}</b>
           </div>
+          <div className="obj wide">
+            <span>ETAPAS</span>
+            <b>{m.boss ? `Órbita (${m.orbitKills} abates) → entrada na atmosfera → chefe` : 'Órbita → na metade do prazo, entrada na atmosfera'}</b>
+          </div>
+          {m.motherships && (
+            <div className="obj wide">
+              <span>NAVES-MÃE</span>
+              <b>
+                {Object.entries(m.motherships)
+                  .map(([st, list]) => list.map((t) => `${MOTHERSHIP_TYPES[t].name} (${st === 'orbit' ? 'órbita' : 'atmosfera'})`).join(', '))
+                  .join(' · ')}
+              </b>
+            </div>
+          )}
           <div className="obj wide">
             <span>ESTRELAS</span>
             <b>★ meta 100% · ★ superação 130% · ★ bônus</b>
