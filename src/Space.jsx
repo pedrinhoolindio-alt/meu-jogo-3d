@@ -97,7 +97,8 @@ const TEX = {
 // Carregamento progressivo: mostra a versão leve na hora e troca pela 4K/8K quando chegar
 // ---------------------------------------------------------------------------
 const cache = new Map()
-const loader = new THREE.TextureLoader()
+// Gerenciador próprio: as texturas dos planetas carregam em segundo plano e não seguram a tela de carregamento
+const loader = new THREE.TextureLoader(new THREE.LoadingManager())
 loader.setCrossOrigin('anonymous')
 
 function loadTex(file, srgb, gl) {

@@ -2,5 +2,5 @@
   "name": "Esquadrão Fênix",
   "description": "Jogo de nave 3D on-rails no navegador com temática de batalha espacial épica e campanha de metas.",
   "permissions": [],
-  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "capabilities": []
 }
