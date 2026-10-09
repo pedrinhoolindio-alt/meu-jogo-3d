@@ -1,8 +1,10 @@
 // src/ui/Screens.jsx
 // Telas: título, briefing da missão, relatório da missão, pausa e relatório anual (fim de jogo).
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useUI } from '../store'
-import { startGame, togglePause, toMenu, startMission, nextMission } from '../flow'
+import { startGame, togglePause, toMenu, startMission, nextMission, openHangar, closeHangar, togglePhoto } from '../flow'
+import { getQuality, setQuality } from '../assets'
+import { LOCATIONS } from '../Space'
 import { MISSIONS } from '../gameState'
 import { CAST } from '../characters'
 import Portrait from './Portrait'
@@ -17,7 +19,9 @@ function Controls() {
       <div><kbd>Clique</kbd> / <kbd>Espaço</kbd> atirar</div>
       <div><kbd>Shift</kbd> turbo</div>
       <div><kbd>Q</kbd> <kbd>E</kbd> giro evasivo (rebate lasers)</div>
+      <div><kbd>F</kbd> / <kbd>Botão do meio</kbd> mísseis teleguiados</div>
       <div><kbd>B</kbd> / <kbd>Botão direito</kbd> bomba</div>
+      <div><kbd>C</kbd> câmera 360° (modo foto)</div>
       <div><kbd>P</kbd> pausa · <kbd>M</kbd> som</div>
     </div>
   )
@@ -38,6 +42,55 @@ const OrgTag = ({ org }) => (
     {org}
   </span>
 )
+
+// Qualidade das texturas dos planetas (vale a partir do próximo carregamento da página)
+function QualityToggle() {
+  const [q, setQ] = useState(getQuality())
+  const change = () => {
+    const next = q === '8k' ? '4k' : '8k'
+    setQuality(next)
+    setQ(next)
+    window.location.reload()
+  }
+  return (
+    <button className="btn small" onClick={change} title="Texturas dos planetas">
+      GRÁFICOS: {q.toUpperCase()}
+    </button>
+  )
+}
+
+// Hangar: a nave gira sozinha e o jogador pode arrastar para olhar de qualquer ângulo
+function Hangar() {
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.code === 'Escape' || e.code === 'Enter') closeHangar()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  return (
+    <div className="cam-overlay">
+      <div className="cam-title">HANGAR · CAÇA FÊNIX-1 “EXECUTOR”</div>
+      <div className="cam-sub">Arraste para girar 360° · role para aproximar · {LOCATIONS.earth.name}</div>
+      <button className="btn small" onClick={closeHangar}>
+        VOLTAR
+      </button>
+    </div>
+  )
+}
+
+// Modo foto durante a missão (tecla C): ação congelada, câmera livre
+function Photo() {
+  return (
+    <div className="cam-overlay">
+      <div className="cam-title">MODO FOTO 360°</div>
+      <div className="cam-sub">Arraste para girar · role para aproximar · C para voltar ao combate</div>
+      <button className="btn small" onClick={togglePhoto}>
+        VOLTAR AO COMBATE
+      </button>
+    </div>
+  )
+}
 
 function Title() {
   const best = useUI((s) => s.best)
@@ -61,9 +114,15 @@ function Title() {
           </div>
         ))}
       </div>
-      <button className="btn primary" onClick={startGame}>
-        INICIAR CAMPANHA
-      </button>
+      <div className="title-actions">
+        <button className="btn primary" onClick={startGame}>
+          INICIAR CAMPANHA
+        </button>
+        <button className="btn" onClick={openHangar}>
+          VER NAVE 360°
+        </button>
+        <QualityToggle />
+      </div>
       {best > 0 && <div className="best">RECORDE: {best.toLocaleString('pt-BR')}</div>}
       <Controls />
     </div>
@@ -277,6 +336,8 @@ function Result({ kind }) {
 export default function Screens() {
   const phase = useUI((s) => s.phase)
   if (phase === 'title') return <Title />
+  if (phase === 'hangar') return <Hangar />
+  if (phase === 'photo') return <Photo />
   if (phase === 'briefing') return <Briefing />
   if (phase === 'debrief') return <Debrief />
   if (phase === 'paused') return <Pause />

@@ -27,7 +27,11 @@ export const CONFIG = {
   // --- Lasers ---
   laserSpeed: 170, // unidades/seg
   laserMaxDistance: 260, // após percorrer isso, o laser é reciclado
-  fireCooldown: [0.13, 0.12, 0.09], // segundos entre rajadas, por nível de arma
+  fireCooldown: [0.13, 0.12, 0.09, 0.1, 0.065], // segundos entre rajadas, por nível de arma
+  maxWeaponLevel: 4,
+  missileSpeed: 75,
+  missileTurn: 4.2, // rad/s de correção de rumo do míssil teleguiado
+  droneDuration: 25, // segundos de duração do drone de escolta
 
   // --- Manobras ---
   boostMul: 1.8, // multiplicador da velocidade do cenário no turbo
@@ -56,7 +60,17 @@ export const ENEMY_TYPES = {
   fighter: { name: 'Vespa', hp: 3, radius: 1.9, score: 100, speed: 55, fireEvery: 1.7, boltSpeed: 70 },
   interceptor: { name: 'Lança', hp: 2, radius: 1.6, score: 150, speed: 78, fireEvery: 1.4, boltSpeed: 85 },
   bomber: { name: 'Martelo', hp: 12, radius: 2.8, score: 400, speed: 32, fireEvery: 2.6, boltSpeed: 42 },
+  // Novos
+  kamikaze: { name: 'Agulha', hp: 1.5, radius: 1.6, score: 120, speed: 62, fireEvery: Infinity, boltSpeed: 0 }, // persegue e colide
+  gunship: { name: 'Ômega', hp: 9, radius: 2.6, score: 350, speed: 40, fireEvery: 2.3, boltSpeed: 60 }, // rajada em leque
+  carrier: { name: 'Colmeia', hp: 22, radius: 3.6, score: 700, speed: 26, fireEvery: 4.2, boltSpeed: 0 }, // lança Agulhas
+  sniper: { name: 'Ferrão', hp: 5, radius: 2.1, score: 300, speed: 45, fireEvery: 3.6, boltSpeed: 170 }, // mira com laser e dispara forte
 }
+// Ordem dos modelos em cada "slot" de inimigo (Enemies.jsx)
+export const ENEMY_LIST = Object.keys(ENEMY_TYPES)
+
+// Armas primárias por nível (pickup dourado sobe o nível)
+export const WEAPONS = ['LASER DUPLO', 'LASER QUÁDRUPLO', 'PLASMA', 'PLASMA EM LEQUE', 'HIPER-LASER']
 
 // ---------------------------------------------------------------------------
 // CAMPANHA: missões do Sesc e do Senac Ceará
@@ -71,14 +85,15 @@ export const MISSIONS = [
   {
     org: 'SENAC',
     title: 'Campanha de Matrículas',
-    place: 'Unidades Centro e Aldeota',
+    place: 'Órbita da Terra · Unidades Centro e Aldeota',
+    location: 'earth',
     speaker: 'roberta',
     briefing:
       'A Armada do Caos lançou a frota da Evasão contra as nossas turmas. Cada nave derrubada é uma matrícula garantida. Bata a meta antes do prazo!',
     indicator: { type: 'kills', label: 'matrículas', unit: 'matrícula', meta: 12 },
     bonus: { type: 'accuracy', value: 35, label: 'Precisão de tiro ≥ 35%' },
     duration: 55,
-    mix: { fighter: 1 },
+    mix: { fighter: 0.8, kamikaze: 0.2 },
     spawnEvery: 1.5,
     maxAlive: 5,
     asteroidEvery: 1.4,
@@ -86,7 +101,8 @@ export const MISSIONS = [
   {
     org: 'SESC',
     title: 'Saúde & Odontologia',
-    place: 'Rede de clínicas Sesc',
+    place: 'Órbita da Lua · Rede de clínicas Sesc',
+    location: 'moon',
     speaker: 'ivone',
     briefing:
       'As agendas das clínicas estão à deriva no espaço! Recolha as cápsulas de atendimento (anéis verdes) enquanto a frota das Faltas tenta impedir.',
@@ -94,7 +110,7 @@ export const MISSIONS = [
     tokenEvery: 3.2,
     bonus: { type: 'finalShield', value: 50, label: 'Terminar com escudo ≥ 50%' },
     duration: 55,
-    mix: { fighter: 0.7, interceptor: 0.3 },
+    mix: { fighter: 0.5, interceptor: 0.3, kamikaze: 0.2 },
     spawnEvery: 1.6,
     maxAlive: 5,
     asteroidEvery: 1.8,
@@ -102,14 +118,15 @@ export const MISSIONS = [
   {
     org: 'SENAC',
     title: 'Ativo Aula: Turmas Confirmadas',
-    place: 'Toda sexta, sem falta',
+    place: 'Órbita de Marte · Toda sexta, sem falta',
+    location: 'mars',
     speaker: 'janiele',
     briefing:
       'Os Adiamentos estão cercando as turmas! Derrube as naves para confirmar o início das aulas. Mantenha a sequência para mostrar consistência.',
     indicator: { type: 'kills', label: 'turmas confirmadas', unit: 'turma confirmada', meta: 16 },
     bonus: { type: 'combo', value: 8, label: 'Sequência de 8 abates' },
     duration: 55,
-    mix: { fighter: 0.6, interceptor: 0.4 },
+    mix: { fighter: 0.4, interceptor: 0.3, gunship: 0.2, kamikaze: 0.1 },
     spawnEvery: 1.2,
     maxAlive: 6,
     asteroidEvery: 1.6,
@@ -117,7 +134,8 @@ export const MISSIONS = [
   {
     org: 'SESC',
     title: 'Turismo Social & Cultura',
-    place: 'Excursões e palcos do Sesc',
+    place: 'Luas de Júpiter · Excursões e palcos do Sesc',
+    location: 'jupiter',
     speaker: 'ivone',
     briefing:
       'Os ônibus do Turismo Social e o público do teatro precisam embarcar! Colete as cápsulas de passageiros e não deixe o escudo cair demais.',
@@ -125,7 +143,7 @@ export const MISSIONS = [
     tokenEvery: 2.8,
     bonus: { type: 'minShield', value: 30, label: 'Escudo nunca abaixo de 30%' },
     duration: 55,
-    mix: { fighter: 0.5, interceptor: 0.3, bomber: 0.2 },
+    mix: { fighter: 0.3, interceptor: 0.2, bomber: 0.15, sniper: 0.2, kamikaze: 0.15 },
     spawnEvery: 1.3,
     maxAlive: 6,
     asteroidEvery: 1.5,
@@ -133,14 +151,15 @@ export const MISSIONS = [
   {
     org: 'FECOMÉRCIO',
     title: 'Ouvidoria em Dia',
-    place: 'Backoffice Sesc/Senac',
+    place: 'Anéis de Saturno · Backoffice Sesc/Senac',
+    location: 'saturn',
     speaker: 'alan',
     briefing:
       'O painel mostra uma onda de manifestações pendentes chegando. Cada nave derrubada é uma resposta enviada no prazo. Os bombardeiros são os casos complexos!',
     indicator: { type: 'kills', label: 'manifestações respondidas', unit: 'resposta enviada', meta: 20 },
     bonus: { type: 'accuracy', value: 40, label: 'Precisão de tiro ≥ 40%' },
     duration: 60,
-    mix: { fighter: 0.45, interceptor: 0.3, bomber: 0.25 },
+    mix: { fighter: 0.25, interceptor: 0.2, bomber: 0.12, gunship: 0.15, sniper: 0.13, carrier: 0.07, kamikaze: 0.08 },
     spawnEvery: 1.0,
     maxAlive: 8,
     asteroidEvery: 1.3,
@@ -148,7 +167,8 @@ export const MISSIONS = [
   {
     org: 'SESC + SENAC',
     title: 'Fechamento Anual de Metas',
-    place: 'Fortaleza do Caos Operacional',
+    place: 'Órbita da Terra ao amanhecer · Fortaleza do Caos',
+    location: 'earthDawn',
     speaker: 'roberta',
     briefing:
       'O Almirante Korrath trouxe a Fortaleza do Caos para impedir o fechamento do ano. Destrua as quatro torres, exponha o núcleo e garanta o resultado de 2026!',
@@ -162,7 +182,7 @@ export const MISSIONS = [
 const noop = () => {}
 
 export const game = {
-  phase: 'title', // title | briefing | playing | debrief | paused | dying | gameover | victory
+  phase: 'title', // title | hangar | briefing | playing | photo | debrief | paused | dying | gameover | victory
   keys: {}, // teclas pressionadas (KeyW, KeyA, Space...)
   target: new THREE.Vector2(0, 0), // posição X/Y DESEJADA da nave (mouse/WASD escrevem aqui)
   shipPos: new THREE.Vector3(), // posição real da nave
@@ -177,6 +197,7 @@ export const game = {
   fx: { explode: noop, sparks: noop, shockwave: noop },
   firePlayerLaser: noop,
   fireEnemyLaser: noop,
+  fireMissile: noop,
   clearEnemyLasers: noop,
   spawnEnemy: noop,
   damageEnemy: noop,
@@ -208,6 +229,10 @@ export function resetGame() {
     hitMarker: 0,
     bombs: 3,
     weaponLevel: 0,
+    missiles: 4, // mísseis teleguiados (F)
+    wantsMissile: false,
+    droneTime: 0, // segundos restantes do drone de escolta
+    seenEnemies: {}, // tipos de inimigo já anunciados no rádio
     score: 0,
     combo: 0,
     maxCombo: 0,
@@ -244,7 +269,7 @@ export const damp = (k, dt) => 1 - Math.exp(-k * dt)
 
 // Delta de tempo do jogo: 0 quando pausado/no menu; aplica câmera lenta (timeScale).
 // O mínimo de 0.0001 evita divisões por zero (delta = 0 no 1º frame).
-const FROZEN = new Set(['paused', 'title', 'briefing', 'debrief'])
+const FROZEN = new Set(['paused', 'title', 'briefing', 'debrief', 'photo', 'hangar'])
 export function frameDt(delta) {
   if (FROZEN.has(game.phase)) return 0
   return Math.min(Math.max(delta, 0.0001), 0.05) * game.timeScale

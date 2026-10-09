@@ -48,3 +48,6 @@ export const ui = {
 export function useUI(selector) {
   return useSyncExternalStore(ui.subscribe, () => selector(state))
 }
+
+// Gancho de depuração (só existe quando o build é feito com VITE_DEBUG=1)
+if (import.meta.env.VITE_DEBUG && typeof window !== 'undefined') window.__ui = ui

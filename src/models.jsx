@@ -61,10 +61,17 @@ function tune(scene) {
   tuned.add(scene)
   scene.traverse((o) => {
     if (o.isMesh && o.material) {
-      o.material.metalness = 0.55
-      o.material.roughness = 0.42
-      o.material.envMapIntensity = 1.1
-      if (o.material.map) o.material.map.anisotropy = 8
+      const m = o.material
+      // Os modelos trazem mapas PBR (normal + metal/rugosidade). Sem eles, usa valores fixos.
+      if (!m.metalnessMap) {
+        m.metalness = 0.55
+        m.roughness = 0.42
+      }
+      if (m.normalMap) m.normalScale.set(1.2, 1.2)
+      m.envMapIntensity = 1.6
+      for (const t of [m.map, m.normalMap, m.metalnessMap]) if (t) t.anisotropy = 8
+      o.castShadow = true
+      o.receiveShadow = true
     }
   })
 }
@@ -129,6 +136,10 @@ export function Ship({ kind, scale = 1, flipped = false, flames, flameMat = M.fl
 export const FighterModel = () => <Ship kind="fighter" scale={0.42} flameMat={M.enemyFlame} glowColor="#ff6040" />
 export const InterceptorModel = () => <Ship kind="interceptor" scale={0.4} flameMat={M.enemyFlame} glowColor="#ff6040" />
 export const BomberModel = () => <Ship kind="bomber" scale={0.6} flameMat={M.enemyFlame} glowColor="#ff6040" />
+export const KamikazeModel = () => <Ship kind="kamikaze" scale={0.3} flameMat={M.enemyFlame} glowColor="#ff6040" />
+export const GunshipModel = () => <Ship kind="gunship" scale={0.48} flameMat={M.enemyFlame} glowColor="#ff6040" />
+export const CarrierModel = () => <Ship kind="carrier" scale={0.75} flameMat={M.enemyFlame} glowColor="#ff6040" />
+export const SniperModel = () => <Ship kind="sniper" scale={0.42} flameMat={M.enemyFlame} glowColor="#ff6040" />
 
 // Pré-carrega tudo assim que o endereço dos modelos for conhecido
 export function preloadShips() {

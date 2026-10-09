@@ -14,6 +14,7 @@ const dirTmp = new THREE.Vector3()
 const COLORS = {
   bolt: new THREE.Color(0.5, 3.4, 0.6),
   plasma: new THREE.Color(3.6, 1.4, 0.3),
+  heavy: new THREE.Color(4, 0.5, 2.6), // disparo carregado do Ferrão
 }
 
 export default function EnemyLasers() {
@@ -78,13 +79,13 @@ export default function EnemyLasers() {
         // Testa a ponta e o meio do trajeto do frame (evita atravessar a nave)
         if (b.active && game.phase === 'playing') {
           mid.addVectors(b.prev, b.pos).multiplyScalar(0.5)
-          const pad = b.kind === 'plasma' ? 0.5 : 0
+          const pad = b.kind === 'plasma' ? 0.5 : b.kind === 'heavy' ? 0.35 : 0
           if (hitsShip(b.pos, pad) || hitsShip(mid, pad)) {
             b.active = false
             if (game.rollTimer > 0) {
               damagePlayer(0, 'laser') // conta como rebatido (som + evento)
               game.fx.sparks(b.pos, 'blue', 10)
-            } else if (damagePlayer(b.kind === 'plasma' ? 14 : 8, 'laser')) {
+            } else if (damagePlayer(b.kind === 'heavy' ? 18 : b.kind === 'plasma' ? 14 : 8, 'laser')) {
               game.fx.sparks(b.pos, b.kind === 'plasma' ? 'orange' : 'green', 14)
             }
           }
@@ -95,6 +96,7 @@ export default function EnemyLasers() {
         dirTmp.copy(b.vel).normalize()
         dummy.quaternion.setFromUnitVectors(UP, dirTmp)
         if (b.kind === 'plasma') dummy.scale.set(4, 0.45, 4)
+        else if (b.kind === 'heavy') dummy.scale.set(2.6, 2.2, 2.6)
         else dummy.scale.set(1, 1, 1)
       } else {
         dummy.scale.setScalar(0)

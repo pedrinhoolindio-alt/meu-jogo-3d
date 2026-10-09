@@ -1,8 +1,8 @@
 // src/Environment.jsx
-// Cenário: estrelas, nebulosas, planeta, naves capitais ao fundo, batalha distante e rastros de velocidade.
+// Cenário em movimento: naves capitais ao fundo, batalha distante, rastros de velocidade e poeira.
+// (Céu, Sol e planetas reais ficam em Space.jsx)
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Stars } from '@react-three/drei'
 import * as THREE from 'three'
 import { game, CONFIG, rand } from './gameState'
 import { Ship, M } from './models'
@@ -16,29 +16,6 @@ const envDt = (delta) => (game.phase === 'paused' ? 0 : Math.min(delta, 0.05))
 // ---------------------------------------------------------------------------
 // Texturas procedurais (canvas)
 // ---------------------------------------------------------------------------
-function cloudTexture(r, g, b) {
-  const s = 256
-  const c = document.createElement('canvas')
-  c.width = c.height = s
-  const ctx = c.getContext('2d')
-  // Vários "borrões" radiais sobrepostos formam uma nuvem irregular
-  for (let i = 0; i < 45; i++) {
-    const a = Math.random() * Math.PI * 2
-    const d = Math.random() * s * 0.28
-    const x = s / 2 + Math.cos(a) * d
-    const y = s / 2 + Math.sin(a) * d
-    const rad = s * (0.1 + Math.random() * 0.22)
-    const grd = ctx.createRadialGradient(x, y, 0, x, y, rad)
-    grd.addColorStop(0, `rgba(${r},${g},${b},0.14)`)
-    grd.addColorStop(1, `rgba(${r},${g},${b},0)`)
-    ctx.fillStyle = grd
-    ctx.fillRect(0, 0, s, s)
-  }
-  const tex = new THREE.CanvasTexture(c)
-  tex.colorSpace = THREE.SRGBColorSpace
-  return tex
-}
-
 function glowTexture() {
   const s = 128
   const c = document.createElement('canvas')
@@ -51,117 +28,6 @@ function glowTexture() {
   ctx.fillStyle = grd
   ctx.fillRect(0, 0, s, s)
   return new THREE.CanvasTexture(c)
-}
-
-function planetTexture() {
-  const w = 512
-  const h = 256
-  const c = document.createElement('canvas')
-  c.width = w
-  c.height = h
-  const ctx = c.getContext('2d')
-  // Faixas horizontais (planeta gasoso) com cores alternadas
-  const bands = ['#7a3b2e', '#b5653d', '#d89a5c', '#8c4a36', '#c97d4a', '#e8b77a', '#6e3326', '#b0603a']
-  let y = 0
-  while (y < h) {
-    const bh = 6 + Math.random() * 26
-    ctx.fillStyle = bands[(Math.random() * bands.length) | 0]
-    ctx.fillRect(0, y, w, bh)
-    y += bh
-  }
-  // Turbulência
-  for (let i = 0; i < 600; i++) {
-    ctx.fillStyle = `rgba(${200 + Math.random() * 55},${120 + Math.random() * 80},${80 + Math.random() * 60},0.08)`
-    ctx.beginPath()
-    ctx.ellipse(Math.random() * w, Math.random() * h, 10 + Math.random() * 50, 2 + Math.random() * 5, 0, 0, Math.PI * 2)
-    ctx.fill()
-  }
-  // Grande tempestade
-  ctx.fillStyle = 'rgba(255,220,180,0.55)'
-  ctx.beginPath()
-  ctx.ellipse(w * 0.62, h * 0.62, 26, 12, 0, 0, Math.PI * 2)
-  ctx.fill()
-  const tex = new THREE.CanvasTexture(c)
-  tex.colorSpace = THREE.SRGBColorSpace
-  return tex
-}
-
-// ---------------------------------------------------------------------------
-// Nebulosas
-// ---------------------------------------------------------------------------
-function Nebula() {
-  const clouds = useMemo(
-    () => [
-      { pos: [-260, 140, -640], scale: 560, tex: cloudTexture(120, 60, 230), opacity: 0.55 },
-      { pos: [320, -60, -680], scale: 620, tex: cloudTexture(40, 190, 210), opacity: 0.4 },
-      { pos: [90, 280, -720], scale: 520, tex: cloudTexture(220, 50, 80), opacity: 0.4 },
-      { pos: [-420, -240, -700], scale: 480, tex: cloudTexture(60, 90, 240), opacity: 0.45 },
-      { pos: [40, 20, -760], scale: 900, tex: cloudTexture(90, 40, 140), opacity: 0.35 },
-    ],
-    []
-  )
-  return clouds.map((c, i) => (
-    <sprite key={i} position={c.pos} scale={[c.scale, c.scale, 1]}>
-      <spriteMaterial map={c.tex} transparent opacity={c.opacity} blending={THREE.AdditiveBlending} depthWrite={false} fog={false} />
-    </sprite>
-  ))
-}
-
-// ---------------------------------------------------------------------------
-// Planeta com atmosfera (shader de Fresnel: brilha mais nas bordas)
-// ---------------------------------------------------------------------------
-const atmoVertex = /* glsl */ `
-  varying vec3 vNormal;
-  varying vec3 vView;
-  void main() {
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    vNormal = normalize(normalMatrix * normal);
-    vView = normalize(-mv.xyz);
-    gl_Position = projectionMatrix * mv;
-  }
-`
-const atmoFragment = /* glsl */ `
-  uniform vec3 uColor;
-  varying vec3 vNormal;
-  varying vec3 vView;
-  void main() {
-    // Fresnel: 1 - |N·V| é 0 no centro do disco e 1 na borda
-    float f = pow(1.0 - abs(dot(vNormal, vView)), 3.0);
-    gl_FragColor = vec4(uColor * f * 1.6, f);
-  }
-`
-
-function Planet() {
-  const planet = useRef()
-  const tex = useMemo(planetTexture, [])
-  const uniforms = useMemo(() => ({ uColor: { value: new THREE.Color('#ff9a5a') } }), [])
-  useFrame((_, delta) => {
-    planet.current.rotation.y += envDt(delta) * 0.01
-  })
-  return (
-    <group position={[-330, -300, -820]}>
-      <mesh ref={planet} rotation={[0.2, 0, 0.25]}>
-        <sphereGeometry args={[130, 64, 32]} />
-        <meshStandardMaterial map={tex} roughness={1} metalness={0} fog={false} />
-      </mesh>
-      <mesh scale={1.05}>
-        <sphereGeometry args={[130, 64, 32]} />
-        <shaderMaterial
-          vertexShader={atmoVertex}
-          fragmentShader={atmoFragment}
-          uniforms={uniforms}
-          transparent
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
-      {/* Lua */}
-      <mesh position={[760, 470, 60]}>
-        <sphereGeometry args={[18, 32, 16]} />
-        <meshStandardMaterial color="#5d6371" roughness={1} fog={false} />
-      </mesh>
-    </group>
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -350,9 +216,6 @@ function SpaceDust() {
 export default function Environment() {
   return (
     <>
-      <Stars radius={300} depth={120} count={9000} factor={7} saturation={0.2} fade speed={0.6} />
-      <Nebula />
-      <Planet />
       <CapitalShips />
       <DistantBattle />
       <Streaks />

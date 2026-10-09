@@ -230,6 +230,20 @@ export const sfx = {
     noise({ dur: 0.5, vol: 0.18, type: 'bandpass', f0: 300, f1: 2400, q: 1.5, attack: 0.15, o: { wet: 0.2, pan: -0.6 } })
     noise({ dur: 0.45, vol: 0.12, type: 'bandpass', f0: 2400, f1: 400, q: 1.5, at: t + 0.2, o: { wet: 0.2, pan: 0.6 } })
   },
+  missile() {
+    if (!can('missile', 0.15)) return
+    // "Whoosh" de lançamento: ruído subindo + tom grave
+    noise({ dur: 0.6, vol: 0.22, type: 'bandpass', f0: 500, f1: 2600, q: 1.2, attack: 0.05, o: { wet: 0.35 } })
+    tone({ type: 'sawtooth', f0: 90, f1: 160, dur: 0.4, vol: 0.06, o: { wet: 0.2 } })
+  },
+  charge() {
+    if (!can('charge', 0.4)) return
+    // Carga do Ferrão (aviso sonoro antes do disparo forte)
+    tone({ type: 'sine', f0: 300, f1: 1400, dur: 1.0, vol: 0.05, attack: 0.3, o: { wet: 0.4 } })
+  },
+  beam() {
+    if (can('beam', 0.1)) fmZap({ f0: 900, f1: 60, ratio: 2.5, index: 1400, dur: 0.45, vol: 0.12, o: { wet: 0.5 } })
+  },
   bombLaunch() {
     if (can('bombL', 0.2)) tone({ type: 'sine', f0: 120, f1: 420, dur: 0.4, vol: 0.2, o: { wet: 0.4 } })
   },

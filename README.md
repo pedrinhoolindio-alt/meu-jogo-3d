@@ -18,7 +18,9 @@ npm run dev
 | Atirar | Clique ou Espaço (segure) |
 | Turbo | Shift |
 | Giro evasivo (rebate lasers) | Q / E |
+| Mísseis teleguiados | F ou botão do meio |
 | Bomba de prótons | B ou botão direito |
+| Câmera 360° (modo foto) | C |
 | Pausa | P ou Esc |
 | Som | M |
 
@@ -36,6 +38,21 @@ npm run dev
 Cada missão tem prazo. No fim, o relatório mostra meta × realizado, % de atingimento e estrelas
 (★ meta 100% · ★ superação 130% · ★ bônus). O fim da campanha traz o **Relatório Anual de Metas**.
 As missões ficam em `MISSIONS` (`src/gameState.js`) — dá para mudar metas, prazos e textos ali.
+
+## Novidades
+
+- **Planetas reais**: começa na órbita da Terra (texturas NASA em até 8K: superfície, nuvens, luzes das cidades
+  e brilho do Sol nos oceanos) e cada missão acontece num lugar do Sistema Solar — Lua, Marte, luas de Júpiter,
+  anéis de Saturno e o amanhecer na órbita da Terra. Céu real da Via Láctea (mapa do satélite Gaia).
+- **Câmera 360°**: botão "VER NAVE 360°" no menu (hangar) e tecla C durante a missão (modo foto).
+- **Mais inimigos**: Agulha (kamikaze), Ômega (rajada em leque), Colmeia (porta-naves) e Ferrão (atirador com mira laser).
+- **Mais armas**: 5 níveis de arma (duplo → quádruplo → plasma → plasma em leque → hiper-laser perfurante),
+  mísseis teleguiados e drone de escolta.
+- **Naves com PBR**: mapas de relevo, metal e rugosidade, reflexo do céu real e sombras do Sol.
+- **Gráficos 8K/4K**: botão no menu (4K é mais leve para computadores mais simples).
+
+Os arquivos grandes (modelos e texturas) ficam no repositório público
+[fenix-assets](https://github.com/pedrinhoolindio-alt/fenix-assets) e são baixados pela CDN jsDelivr.
 
 ## O que tem no jogo
 

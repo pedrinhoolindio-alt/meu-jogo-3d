@@ -1,5 +1,6 @@
 // src/Pickups.jsx
-// Power-ups: escudo (azul), arma (dourado) e bomba (vermelho).
+// Power-ups: escudo (azul), arma (dourado), bomba (vermelho), mísseis (laranja), drone (ciano)
+// e cápsulas de meta (verde).
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -7,7 +8,7 @@ import { game, CONFIG, frameDt } from './gameState'
 import { sfx } from './audio'
 
 const MAX = 14
-const TYPES = ['shield', 'weapon', 'bomb', 'goal']
+const TYPES = ['shield', 'weapon', 'bomb', 'goal', 'missile', 'drone']
 const toShip = new THREE.Vector3()
 
 const mat = (r, g, b) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), toneMapped: false })
@@ -18,6 +19,8 @@ const MATS = {
   core: mat(2.5, 2.5, 2.5),
   goal: mat(0.6, 3.2, 1.2),
   goalCore: mat(3, 3.4, 2.6),
+  missile: mat(3.6, 1.5, 0.3),
+  drone: mat(0.4, 3, 3.2),
 }
 
 function ShieldModel() {
@@ -82,6 +85,39 @@ function GoalModel() {
   )
 }
 
+// Mísseis: três foguetes em feixe dentro de um anel laranja
+function MissileModel() {
+  return (
+    <group>
+      <mesh material={MATS.missile} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[1, 0.08, 6, 32]} />
+      </mesh>
+      {[-0.35, 0, 0.35].map((x) => (
+        <mesh key={x} material={MATS.core} position={[x, 0, 0]}>
+          <coneGeometry args={[0.14, 0.9, 8]} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+// Drone: octaedro com dois anéis ciano cruzados
+function DroneModel() {
+  return (
+    <group>
+      <mesh material={MATS.drone}>
+        <torusGeometry args={[0.95, 0.07, 6, 32]} />
+      </mesh>
+      <mesh material={MATS.drone} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.95, 0.07, 6, 32]} />
+      </mesh>
+      <mesh material={MATS.core}>
+        <octahedronGeometry args={[0.45, 0]} />
+      </mesh>
+    </group>
+  )
+}
+
 export default function Pickups() {
   const groups = useRef([])
   const models = useRef([])
@@ -105,7 +141,7 @@ export default function Pickups() {
   function collect(p) {
     p.active = false
     sfx.pickup()
-    game.fx.sparks(p.pos, p.type === 'shield' ? 'blue' : p.type === 'weapon' ? 'orange' : p.type === 'goal' ? 'green' : 'bomb', 20)
+    game.fx.sparks(p.pos, { shield: 'blue', weapon: 'orange', goal: 'green', missile: 'orange', drone: 'blue' }[p.type] || 'bomb', 20)
     if (p.type === 'goal') {
       // Conta para a meta da missão
       if (game.mstats) game.mstats.tokens++
@@ -114,10 +150,14 @@ export default function Pickups() {
       return
     }
     let key = 'pickup_' + p.type
-    if (p.type === 'shield') {
+    if (p.type === 'missile') {
+      game.missiles = Math.min(12, game.missiles + 4)
+    } else if (p.type === 'drone') {
+      game.droneTime = CONFIG.droneDuration
+    } else if (p.type === 'shield') {
       game.shield = Math.min(CONFIG.maxShield, game.shield + 35)
     } else if (p.type === 'weapon') {
-      if (game.weaponLevel < 2) {
+      if (game.weaponLevel < CONFIG.maxWeaponLevel) {
         game.weaponLevel++
         key = 'pickup_weapon' + game.weaponLevel
       } else {
@@ -161,7 +201,7 @@ export default function Pickups() {
     <>
       {Array.from({ length: MAX }, (_, i) => (
         <group key={i} ref={(el) => (groups.current[i] = el)} visible={false}>
-          {[ShieldModel, WeaponModel, BombModel, GoalModel].map((Model, j) => (
+          {[ShieldModel, WeaponModel, BombModel, GoalModel, MissileModel, DroneModel].map((Model, j) => (
             <group
               key={j}
               ref={(el) => {

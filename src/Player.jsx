@@ -15,6 +15,7 @@ const lookTarget = new THREE.Vector3()
 const smoothLook = new THREE.Vector3(0, 0, -20)
 const prevPos = new THREE.Vector3()
 let lastEngine = -1
+let wasOrbit = false
 
 // Curva "ease in-out": começa e termina devagar (usada no giro evasivo)
 const easeInOut = (p) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2)
@@ -27,6 +28,17 @@ export default function Player() {
 
   useFrame((state, delta) => {
     if (game.phase === 'paused') return
+    // Câmera 360° (hangar e modo foto): a OrbitControls controla a câmera; a nave fica parada
+    const orbit = game.phase === 'hangar' || game.phase === 'photo'
+    if (orbit) {
+      wasOrbit = true
+      return
+    }
+    // Voltando do 360°: a câmera "voa" suavemente de onde estava até a posição de perseguição
+    if (wasOrbit) {
+      wasOrbit = false
+      camBase.copy(state.camera.position)
+    }
     // Trava o delta: evita "teleporte" ao voltar de outra aba.
     // O mínimo de 0.0001 evita dividir por zero no 1º frame (delta = 0 → velocidade NaN → nave some)
     const raw = Math.min(Math.max(delta, 0.0001), 0.05)
@@ -37,7 +49,7 @@ export default function Player() {
     const playing = game.phase === 'playing'
 
     if (game.phase === 'title') {
-      // Na tela de título a nave só "flutua"
+      // Na tela de título a nave só "flutua" sobre a Terra
       const t = state.clock.elapsedTime
       s.position.set(Math.sin(t * 0.5) * 1.2, Math.sin(t * 0.8) * 0.5 - 0.5, 0)
       s.rotation.set(Math.sin(t * 0.8) * 0.05, 0, Math.sin(t * 0.5) * -0.15)

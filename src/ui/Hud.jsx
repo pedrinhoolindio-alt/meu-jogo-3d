@@ -1,11 +1,10 @@
 // src/ui/Hud.jsx
 // HUD: lê o estado do jogo a cada quadro e escreve direto no DOM (sem re-render do React).
 import { useEffect, useRef } from 'react'
-import { game, CONFIG } from '../gameState'
+import { game, CONFIG, WEAPONS } from '../gameState'
 import { missionProgress } from '../Director'
 import { useUI } from '../store'
 
-const WEAPONS = ['LASER DUPLO', 'LASER QUÁDRUPLO', 'PLASMA']
 
 function Banner() {
   const banner = useUI((s) => s.banner)
@@ -41,6 +40,10 @@ export default function Hud() {
         r.boostBar.style.opacity = game.boosting ? 1 : 0.75
         r.bombs.textContent = game.bombs > 0 ? '◆ '.repeat(game.bombs).trim() : '—'
         r.weapon.textContent = WEAPONS[game.weaponLevel]
+        r.weaponLvl.textContent = '▮'.repeat(game.weaponLevel + 1) + '▯'.repeat(CONFIG.maxWeaponLevel - game.weaponLevel)
+        r.missiles.textContent = game.missiles > 0 ? `${game.missiles}` : '—'
+        r.drone.style.display = game.droneTime > 0 ? 'block' : 'none'
+        if (game.droneTime > 0) r.drone.textContent = `DRONE ${Math.ceil(game.droneTime)}s`
         r.roll.classList.toggle('cooldown', game.rollCooldown > 0)
 
         // ---- Painel da missão: meta, realizado, atingimento e prazo ----
@@ -137,11 +140,22 @@ export default function Hud() {
         <div className="hud-bottom-right">
           <div className="label">ARMA</div>
           <div className="value" ref={ref('weapon')} />
-          <div className="label">BOMBAS [B]</div>
-          <div className="value bombs" ref={ref('bombs')} />
+          <div className="weapon-lvl" ref={ref('weaponLvl')} />
+          <div className="sec-row">
+            <div>
+              <div className="label">MÍSSEIS [F]</div>
+              <div className="value missiles" ref={ref('missiles')} />
+            </div>
+            <div>
+              <div className="label">BOMBAS [B]</div>
+              <div className="value bombs" ref={ref('bombs')} />
+            </div>
+          </div>
+          <div className="drone-tag" ref={ref('drone')} />
           <div className="roll" ref={ref('roll')}>
             GIRO [Q/E]
           </div>
+          <div className="cam-hint">C · CÂMERA 360°</div>
         </div>
 
         <div className="low-alert" ref={ref('alert')}>

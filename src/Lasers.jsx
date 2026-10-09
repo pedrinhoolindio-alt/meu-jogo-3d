@@ -17,6 +17,7 @@ export const LASER_COLORS = {
   player: new THREE.Color(3.2, 0.35, 0.25),
   plasma: new THREE.Color(3, 0.7, 2.8),
   wing: new THREE.Color(0.4, 2.2, 3.4),
+  hyper: new THREE.Color(3.4, 3.2, 1.2),
 }
 
 export default function Lasers() {
@@ -39,6 +40,8 @@ export default function Lasers() {
         owner: 'player',
         width: 1,
         speed: CONFIG.laserSpeed,
+        pierce: 0, // quantos inimigos ainda pode atravessar (hiper-laser)
+        lastHit: null,
       })),
     []
   )
@@ -65,6 +68,8 @@ export default function Lasers() {
         l.owner = owner
         l.width = opts.width ?? 1
         l.speed = opts.speed ?? CONFIG.laserSpeed
+        l.pierce = opts.pierce ?? 0
+        l.lastHit = null
         l.active = true
         mesh.current.setColorAt(i, opts.color || LASER_COLORS[owner] || LASER_COLORS.player)
         mesh.current.instanceColor.needsUpdate = true
@@ -73,23 +78,36 @@ export default function Lasers() {
     }
   }, [pool])
 
+  // Ângulo de desvio (radianos) para os tiros do leque, em torno do eixo Y
+  const spreadQ = useMemo(() => [-0.09, 0.09].map((a) => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), a)), [])
+
   function fireFromShip() {
     const lvl = game.weaponLevel
     // Nível 0: pares alternados (cima/baixo). Nível 1+: os 4 canhões juntos.
     const idx = lvl === 0 ? [pair.current * 2, pair.current * 2 + 1] : [0, 1, 2, 3]
     if (lvl === 0) pair.current = 1 - pair.current
+    const opts =
+      lvl >= 4
+        ? { dmg: 2, width: 1.4, color: LASER_COLORS.hyper, speed: 230, pierce: 2 } // hiper-laser: rápido e perfurante
+        : lvl >= 2
+          ? { dmg: 1.6, width: 1.7, color: LASER_COLORS.plasma }
+          : { dmg: 1, width: 1, color: LASER_COLORS.player }
     for (const i of idx) {
       // Posição do canhão no MUNDO:
       //   offset local → aplica a rotação da nave (quaternion) → soma a posição da nave
       origin.copy(CANNONS[i]).applyQuaternion(game.shipQuat).add(game.shipPos)
       // Direção = (mira - origem) normalizada → todos os canhões convergem na mira
       dir.subVectors(game.aim, origin).normalize()
-      game.firePlayerLaser(origin, dir, {
-        dmg: lvl >= 2 ? 1.6 : 1,
-        width: lvl >= 2 ? 1.7 : 1,
-        color: lvl >= 2 ? LASER_COLORS.plasma : LASER_COLORS.player,
-      })
+      game.firePlayerLaser(origin, dir, opts)
       game.stats.shots++
+    }
+    // Leque (nível 3+): dois tiros extras das pontas das asas, abertos 9° para cada lado
+    if (lvl >= 3) {
+      for (let k = 0; k < 2; k++) {
+        origin.copy(CANNONS[k]).applyQuaternion(game.shipQuat).add(game.shipPos)
+        dir.subVectors(game.aim, origin).normalize().applyQuaternion(spreadQ[k]) // asa direita abre para a direita (ângulo negativo em Y)
+        game.firePlayerLaser(origin, dir, { ...opts, dmg: opts.dmg * 0.8 })
+      }
     }
     sfx.laser()
   }

@@ -2,3 +2,6 @@ node_modules
 dist
 .DS_Store
 *.local
+
+# Cópia local opcional do repositório fenix-assets (não versionar)
+public/assets

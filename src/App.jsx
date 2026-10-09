@@ -1,12 +1,13 @@
 // src/App.jsx
 import { Suspense, useEffect, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { useProgress } from '@react-three/drei'
+import { useProgress, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { resolveAssetBase } from './assets'
 import { preloadShips } from './models'
 import Environment from './Environment'
+import Space from './Space'
+import Missiles from './Missiles'
 import Player from './Player'
 import Wingmen from './Wingmen'
 import Lasers from './Lasers'
@@ -23,7 +24,7 @@ import Radio from './ui/Radio'
 import Screens from './ui/Screens'
 import { game, BOUNDS } from './gameState'
 import { ui, useUI } from './store'
-import { startGame, togglePause } from './flow'
+import { startGame, togglePause, togglePhoto } from './flow'
 import { toggleMute } from './audio'
 
 // ---------------------------------------------------------------------------
@@ -43,6 +44,8 @@ function useInput() {
       if (e.code === 'KeyQ') game.rollRequest = -1
       if (e.code === 'KeyE') game.rollRequest = 1
       if (e.code === 'KeyB') game.wantsBomb = true
+      if (e.code === 'KeyF') game.wantsMissile = true
+      if (e.code === 'KeyC') togglePhoto()
       if (e.code === 'KeyP' || e.code === 'Escape') togglePause()
       if (e.code === 'KeyM') ui.set({ muted: toggleMute() })
       const phase = ui.get().phase
@@ -64,6 +67,10 @@ function useInput() {
     const onMouseDown = (e) => {
       if (e.button === 0 && playing()) game.wantsToFire = true
       if (e.button === 2) game.wantsBomb = true
+      if (e.button === 1) {
+        e.preventDefault()
+        game.wantsMissile = true
+      }
     }
     const onMouseUp = (e) => {
       if (e.button === 0) game.wantsToFire = false
@@ -95,21 +102,30 @@ function useInput() {
   }, [])
 }
 
-// Mapa de ambiente gerado na hora (sem baixar HDRI): dá reflexos realistas no metal das naves
-function SceneEnvironment() {
-  const { gl, scene } = useThree()
+// Câmera 360°: no hangar gira sozinha; no modo foto o jogador arrasta para olhar em volta
+function OrbitCamera() {
+  const phase = useUI((s) => s.phase)
+  const active = phase === 'hangar' || phase === 'photo'
+  const { camera } = useThree()
   useEffect(() => {
-    const pmrem = new THREE.PMREMGenerator(gl)
-    const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
-    scene.environment = env
-    scene.environmentIntensity = 0.55
-    return () => {
-      scene.environment = null
-      env.dispose()
-      pmrem.dispose()
-    }
-  }, [gl, scene])
-  return null
+    if (!active) return
+    camera.fov = 55
+    camera.updateProjectionMatrix()
+  }, [active, camera])
+  if (!active) return null
+  return (
+    <OrbitControls
+      makeDefault
+      target={[game.shipPos.x, game.shipPos.y, game.shipPos.z]}
+      enablePan={false}
+      enableDamping
+      dampingFactor={0.08}
+      minDistance={5}
+      maxDistance={60}
+      autoRotate={phase === 'hangar'}
+      autoRotateSpeed={0.8}
+    />
+  )
 }
 
 // Tela de carregamento enquanto os modelos 3D chegam
@@ -118,7 +134,7 @@ function Loading({ ready }) {
   if (ready && !active) return null
   return (
     <div className="loading">
-      <div className="loading-title">CARREGANDO FROTA</div>
+      <div className="loading-title">CARREGANDO FROTA E PLANETAS</div>
       <div className="bar thin loading-bar">
         <div className="fill wave-fill" style={{ transform: `scaleX(${ready ? progress / 100 : 0.05})` }} />
       </div>
@@ -133,6 +149,7 @@ function World() {
       <Player />
       <Wingmen />
       <Lasers />
+      <Missiles />
       <EnemyLasers />
       <Enemies />
       <Asteroids />
@@ -163,23 +180,19 @@ export default function App() {
       {ready && (
       <Canvas
         className={phase === 'playing' ? 'playing' : ''}
-        camera={{ position: [0, 2.8, 11], fov: 70, near: 0.1, far: 1500 }}
+        camera={{ position: [0, 2.8, 11], fov: 70, near: 0.5, far: 30000 }}
         dpr={[1, 2]}
+        shadows="soft"
         gl={{ antialias: false, powerPreference: 'high-performance' }}
       >
-        <color attach="background" args={['#03040c']} />
-        <fog attach="fog" args={['#05071a', 120, 300]} />
+        <color attach="background" args={['#000000']} />
 
-        <ambientLight intensity={0.35} />
-        <hemisphereLight args={['#9fc4ff', '#2a0f1a', 0.6]} />
-        <directionalLight position={[8, 10, 6]} intensity={2.6} color="#fff1dc" />
-        <directionalLight position={[-6, -3, -8]} intensity={0.8} color="#4f7dff" />
-
-        <SceneEnvironment />
+        <Space />
         <Suspense fallback={null}>
           <Environment />
           <World key={runId} />
         </Suspense>
+        <OrbitCamera />
         <Effects />
       </Canvas>
       )}

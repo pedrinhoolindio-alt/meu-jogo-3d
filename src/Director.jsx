@@ -57,6 +57,9 @@ export default function Director() {
         case 'pickup':
           sayLine(ev.key, { priority: 1 })
           break
+        case 'newEnemy':
+          sayLine('newEnemy_' + ev.enemy, { priority: 2 })
+          break
         case 'deflect':
           sayLine('deflect', { priority: 0, cooldown: 20 })
           break

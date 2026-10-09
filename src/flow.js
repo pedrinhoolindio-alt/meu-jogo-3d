@@ -74,6 +74,34 @@ export function nextMission() {
   openBriefing(game.missionIndex + 1)
 }
 
+// Modo foto 360°: congela a ação e libera a câmera para girar em volta da nave (tecla C)
+export function togglePhoto() {
+  if (game.phase === 'playing') {
+    game.phase = 'photo'
+    game.wantsToFire = false
+    setEngine(false, false)
+    ui.set({ phase: 'photo' })
+  } else if (game.phase === 'photo') {
+    game.phase = 'playing'
+    setEngine(true, false)
+    ui.set({ phase: 'playing' })
+  }
+}
+
+// Hangar: vê a nave em 360° antes de começar
+export function openHangar() {
+  if (game.phase !== 'title') return
+  initAudio()
+  game.phase = 'hangar'
+  ui.set({ phase: 'hangar' })
+}
+
+export function closeHangar() {
+  if (game.phase !== 'hangar') return
+  game.phase = 'title'
+  ui.set({ phase: 'title' })
+}
+
 export function togglePause() {
   if (game.phase === 'playing') {
     setEngine(false, false)
