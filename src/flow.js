@@ -32,7 +32,11 @@ export function startGame() {
   resetGame()
   clearRadio()
   ui.set({ runId: ui.get().runId + 1, result: null, debrief: null, stage: 'orbit' })
-  openBriefing(0)
+  // Atalho de teste pelo endereço: ?missao=1..6 começa naquela missão; &superficie=1 já entra na atmosfera
+  const q = new URLSearchParams(window.location.search)
+  const start = Math.min(MISSIONS.length, Math.max(1, Number(q.get('missao')) || 1)) - 1
+  game.skipToSurface = q.has('superficie')
+  openBriefing(start)
 }
 
 // Tela de briefing (jogo congelado até o jogador iniciar)
@@ -66,6 +70,13 @@ export function startMission() {
     banner: { id: Date.now(), title: `MISSÃO ${game.missionIndex + 1}`, sub: m.title, alert: !!m.boss },
   })
   setMusicIntensity(m.boss ? 2 : 1)
+  if (game.skipToSurface) {
+    game.skipToSurface = false
+    setTimeout(() => {
+      if (m.duration) game.missionTime = m.duration / 2
+      startEntry()
+    }, 1500)
+  }
 }
 
 // ---------------------------------------------------------------------------

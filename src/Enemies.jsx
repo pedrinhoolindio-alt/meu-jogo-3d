@@ -340,7 +340,7 @@ export default function Enemies() {
         // Caças só atiram com o nariz apontado para o jogador (cone de ~22°);
         // naves de "torre" (standoff) atiram de qualquer ângulo dentro do alcance.
         const facing = e.dir.dot(toShip)
-        const canFire = T.ai === 'standoff' ? dist < T.range * 2.2 : facing > 0.93 && dist < 300
+        const canFire = T.ai === 'standoff' ? dist < T.range * 2.2 : facing > 0.95 && dist < 280
         if (canFire) {
           fire(e)
           e.fireT = T.fireEvery * aggression * rand(0.8, 1.3)

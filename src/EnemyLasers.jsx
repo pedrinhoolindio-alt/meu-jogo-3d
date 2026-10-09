@@ -106,7 +106,7 @@ export default function EnemyLasers() {
             if (game.rollTimer > 0) {
               damagePlayer(0, 'laser') // conta como rebatido (som + evento)
               game.fx.sparks(b.pos, 'blue', 10)
-            } else if (damagePlayer(b.kind === 'heavy' ? 18 : b.kind === 'plasma' || b.kind === 'seeker' ? 14 : 8, 'laser')) {
+            } else if (damagePlayer(b.kind === 'heavy' ? 18 : b.kind === 'plasma' || b.kind === 'seeker' ? 12 : 6, 'laser')) {
               game.fx.sparks(b.pos, b.kind === 'plasma' ? 'orange' : 'green', 14)
             }
           }
