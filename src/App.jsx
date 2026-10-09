@@ -25,7 +25,7 @@ import Screens from './ui/Screens'
 import { game, BOUNDS } from './gameState'
 import { ui, useUI } from './store'
 import { startGame, togglePause, togglePhoto } from './flow'
-import { toggleMute } from './audio'
+import { toggleMute, handleUploadedAudioFiles } from './audio'
 
 // ---------------------------------------------------------------------------
 // Entrada (mouse + teclado) → escreve no estado global `game`
@@ -64,6 +64,43 @@ function useInput() {
       const ny = -((e.clientY / window.innerHeight) * 2 - 1) // baixo -1 → cima +1 (Y da tela é invertido)
       game.target.set(nx * BOUNDS.x, ny * BOUNDS.y)
     }
+
+    let isScreenDragging = false
+    let dragPointerId = null
+    let lastTouchX = 0
+    let lastTouchY = 0
+
+    const onPointerDown = (e) => {
+      if (e.pointerType !== 'touch') return
+      // Ignora se o toque começou sobre controles de toque da interface ou botões
+      if (e.target.closest('.touch-controls-layer, .hud-top-right, button, .btn')) return
+      if (!playing()) return
+      isScreenDragging = true
+      dragPointerId = e.pointerId
+      lastTouchX = e.clientX
+      lastTouchY = e.clientY
+    }
+
+    const onPointerMove = (e) => {
+      if (e.pointerType !== 'touch') return
+      if (!isScreenDragging || e.pointerId !== dragPointerId || !playing()) return
+      const dx = e.clientX - lastTouchX
+      const dy = e.clientY - lastTouchY
+      lastTouchX = e.clientX
+      lastTouchY = e.clientY
+      const scaleX = (BOUNDS.x * 2.2) / window.innerWidth
+      const scaleY = (BOUNDS.y * 2.2) / window.innerHeight
+      game.target.x = Math.max(-BOUNDS.x, Math.min(BOUNDS.x, game.target.x + dx * scaleX))
+      game.target.y = Math.max(-BOUNDS.y, Math.min(BOUNDS.y, game.target.y - dy * scaleY))
+    }
+
+    const onPointerUp = (e) => {
+      if (e.pointerId === dragPointerId) {
+        isScreenDragging = false
+        dragPointerId = null
+      }
+    }
+
     const onMouseDown = (e) => {
       if (e.button === 0 && playing()) game.wantsToFire = true
       if (e.button === 2) game.wantsBomb = true
@@ -80,12 +117,16 @@ function useInput() {
     const onVisibility = () => {
       if (document.hidden && playing()) togglePause()
       game.keys = {}
-      game.wantsToFire = false
+      if (!game.autoFire) game.wantsToFire = false
     }
 
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+    window.addEventListener('pointercancel', onPointerUp)
     window.addEventListener('mousedown', onMouseDown)
     window.addEventListener('mouseup', onMouseUp)
     window.addEventListener('contextmenu', onContextMenu)
@@ -94,6 +135,10 @@ function useInput() {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+      window.removeEventListener('pointercancel', onPointerUp)
       window.removeEventListener('mousedown', onMouseDown)
       window.removeEventListener('mouseup', onMouseUp)
       window.removeEventListener('contextmenu', onContextMenu)
@@ -166,6 +211,48 @@ export default function App() {
   const runId = useUI((s) => s.runId)
   const phase = useUI((s) => s.phase)
   const [ready, setReady] = useState(false)
+  const [isDraggingAudio, setIsDraggingAudio] = useState(false)
+  const [dragFeedback, setDragFeedback] = useState('')
+
+  useEffect(() => {
+    const onDragOver = (e) => {
+      e.preventDefault()
+      setIsDraggingAudio(true)
+    }
+    const onDragLeave = (e) => {
+      if (
+        e.clientX <= 0 ||
+        e.clientY <= 0 ||
+        e.clientX >= window.innerWidth ||
+        e.clientY >= window.innerHeight
+      ) {
+        setIsDraggingAudio(false)
+      }
+    }
+    const onDrop = async (e) => {
+      e.preventDefault()
+      setIsDraggingAudio(false)
+      if (e.dataTransfer?.files?.length) {
+        const res = await handleUploadedAudioFiles(e.dataTransfer.files)
+        if (res.success) {
+          setDragFeedback(
+            res.count === 2
+              ? `✔ Músicas ativadas! Intro: "${res.intro}" | Jogo: "${res.game}"`
+              : `✔ Música da Intro ativada: "${res.intro}"!`
+          )
+          setTimeout(() => setDragFeedback(''), 7000)
+        }
+      }
+    }
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('dragleave', onDragLeave)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('dragleave', onDragLeave)
+      window.removeEventListener('drop', onDrop)
+    }
+  }, [])
 
   // Descobre de onde baixar os modelos (pasta local ou GitHub) antes de montar a cena
   useEffect(() => {
@@ -200,6 +287,18 @@ export default function App() {
       <Hud />
       <Radio />
       <Screens />
+
+      {/* Overlay de arrastar e soltar músicas */}
+      {isDraggingAudio && (
+        <div className="drag-audio-overlay">
+          <div className="drag-audio-card">
+            <div className="drag-icon">📥</div>
+            <h2>SOLTE SUAS MÚSICAS AQUI</h2>
+            <p>O jogo detecta automaticamente a Intro e a Música de Combate!</p>
+          </div>
+        </div>
+      )}
+      {dragFeedback && <div className="audio-toast floating">{dragFeedback}</div>}
     </>
   )
 }

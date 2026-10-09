@@ -7,6 +7,7 @@ import { getQuality, setQuality } from '../assets'
 import { LOCATIONS } from '../Space'
 import { MISSIONS } from '../gameState'
 import { CAST } from '../characters'
+import { playIntro } from '../audio'
 import Portrait from './Portrait'
 
 const stop = (e) => e.stopPropagation()
@@ -15,14 +16,17 @@ export const ORG_COLORS = { SESC: '#e8402f', SENAC: '#2f8fff', FECOMÉRCIO: '#2f
 function Controls() {
   return (
     <div className="controls">
-      <div><kbd>Mouse</kbd> / <kbd>WASD</kbd> mover</div>
-      <div><kbd>Clique</kbd> / <kbd>Espaço</kbd> atirar</div>
-      <div><kbd>Shift</kbd> turbo</div>
-      <div><kbd>Q</kbd> <kbd>E</kbd> giro evasivo (rebate lasers)</div>
+      <div><kbd>Mouse</kbd> / <kbd>WASD</kbd> ou <b>Joystick Touch</b> mover</div>
+      <div><kbd>Clique</kbd> / <kbd>Espaço</kbd> ou <b>Botão TIRO</b> atirar</div>
+      <div><kbd>Shift</kbd> ou <b>Botão TURBO</b> acelerar</div>
+      <div><kbd>Q</kbd> <kbd>E</kbd> ou <b>Botão GIRO</b> esquiva (rebate lasers)</div>
       <div><kbd>F</kbd> / <kbd>Botão do meio</kbd> mísseis teleguiados</div>
-      <div><kbd>B</kbd> / <kbd>Botão direito</kbd> bomba</div>
+      <div><kbd>B</kbd> ou <b>Botão BOMBA</b> detonar</div>
       <div><kbd>C</kbd> câmera 360° (modo foto)</div>
-      <div><kbd>P</kbd> pausa · <kbd>M</kbd> som</div>
+      <div><kbd>P</kbd> ou <b>Botão ⏸</b> pausar · <kbd>M</kbd> som</div>
+      <div className="mobile-hint" style={{ gridColumn: '1 / -1', color: 'var(--cyan)', marginTop: '4px' }}>
+        📱 Celular: Use o Joystick na esquerda e os botões táticos na direita (com Auto-Tiro opcional)
+      </div>
     </div>
   )
 }
@@ -94,6 +98,25 @@ function Photo() {
 
 function Title() {
   const best = useUI((s) => s.best)
+
+  useEffect(() => {
+    playIntro()
+    const onUserGesture = () => {
+      playIntro()
+      window.removeEventListener('click', onUserGesture)
+      window.removeEventListener('keydown', onUserGesture)
+      window.removeEventListener('touchstart', onUserGesture)
+    }
+    window.addEventListener('click', onUserGesture)
+    window.addEventListener('keydown', onUserGesture)
+    window.addEventListener('touchstart', onUserGesture)
+    return () => {
+      window.removeEventListener('click', onUserGesture)
+      window.removeEventListener('keydown', onUserGesture)
+      window.removeEventListener('touchstart', onUserGesture)
+    }
+  }, [])
+
   return (
     <div className="screen title-screen" onMouseDown={stop}>
       <div className="logo">
@@ -115,7 +138,7 @@ function Title() {
         ))}
       </div>
       <div className="title-actions">
-        <button className="btn primary" onClick={startGame}>
+        <button id="botao-start" className="btn primary" onClick={startGame}>
           INICIAR CAMPANHA
         </button>
         <button className="btn" onClick={openHangar}>

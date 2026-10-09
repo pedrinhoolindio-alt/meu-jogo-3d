@@ -445,8 +445,251 @@ export function stopMusic() {
   musicTimer = null
 }
 
+// ---------------------------------------------------------------------------
+// Faixas de áudio e transição suave (Fade Out)
+// ---------------------------------------------------------------------------
+export const resolveAudioUrl = (subpath) => {
+  const base = import.meta.env.BASE_URL || './'
+  const cleanBase = base.endsWith('/') ? base : base + '/'
+  const cleanSub = subpath.replace(/^\//, '')
+  return cleanBase + cleanSub
+}
+
+const INTRO_CANDIDATES = [
+  'audio/Vector_Override.mp3',
+  'Vector_Override.mp3',
+  'audio/vector_override.mp3',
+  'vector_override.mp3',
+  'audio/intro.mp3',
+  'audio/intro.wav',
+  'audio/intro.ogg',
+  'audio/intro.m4a',
+  'audio/Intro.mp3',
+  'intro.mp3',
+  'intro.wav',
+]
+
+const GAME_CANDIDATES = [
+  'audio/Cockpit_Redline.mp3',
+  'Cockpit_Redline.mp3',
+  'audio/cockpit_redline.mp3',
+  'cockpit_redline.mp3',
+  'audio/game.mp3',
+  'audio/game.wav',
+  'audio/game.ogg',
+  'audio/game.m4a',
+  'audio/Game.mp3',
+  'game.mp3',
+  'game.wav',
+]
+
+function setupFallback(audio, list) {
+  if (!audio) return
+  let idx = 0
+  audio.src = resolveAudioUrl(list[idx])
+  audio.addEventListener('error', () => {
+    if (idx + 1 < list.length) {
+      idx++
+      audio.src = resolveAudioUrl(list[idx])
+      audio.load()
+    }
+  })
+}
+
+export const musicaIntro = typeof Audio !== 'undefined' ? new Audio() : null
+export const musicaJogo = typeof Audio !== 'undefined' ? new Audio() : null
+
+if (musicaIntro) {
+  musicaIntro.loop = true
+  musicaIntro.volume = 0.8
+  setupFallback(musicaIntro, INTRO_CANDIDATES)
+}
+if (musicaJogo) {
+  musicaJogo.loop = true
+  musicaJogo.volume = 0.8
+  setupFallback(musicaJogo, GAME_CANDIDATES)
+}
+
+// Persistência de arquivos de áudio customizados no IndexedDB
+const DB_NAME = 'fenix_custom_audio'
+const STORE_NAME = 'tracks'
+
+function openAudioDb() {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === 'undefined') return resolve(null)
+    const req = indexedDB.open(DB_NAME, 1)
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME)
+      }
+    }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => resolve(null)
+  })
+}
+
+export async function saveCustomAudio(kind, file) {
+  try {
+    const db = await openAudioDb()
+    if (!db) return
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    tx.objectStore(STORE_NAME).put({ file, name: file.name, date: Date.now() }, kind)
+    const url = URL.createObjectURL(file)
+    if (kind === 'intro' && musicaIntro) {
+      musicaIntro.src = url
+      musicaIntro.load()
+      playIntro()
+    } else if (kind === 'game' && musicaJogo) {
+      musicaJogo.src = url
+      musicaJogo.load()
+    }
+  } catch (err) {
+    console.warn('Erro ao salvar áudio customizado:', err)
+  }
+}
+
+export async function handleUploadedAudioFiles(fileList) {
+  const files = Array.from(fileList || []).filter(
+    (f) => f.type.startsWith('audio/') || f.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i)
+  )
+  if (!files.length) return { success: false, message: 'Nenhum arquivo de áudio válido selecionado.' }
+
+  if (files.length === 1) {
+    await saveCustomAudio('intro', files[0])
+    playIntro()
+    return { success: true, count: 1, intro: files[0].name }
+  }
+
+  // Ordena por tamanho: o menor é a intro, o maior é a música da partida
+  files.sort((a, b) => a.size - b.size)
+  const introFile = files[0]
+  const gameFile = files[files.length - 1]
+
+  await saveCustomAudio('intro', introFile)
+  await saveCustomAudio('game', gameFile)
+  playIntro()
+
+  return {
+    success: true,
+    count: 2,
+    intro: introFile.name,
+    game: gameFile.name,
+  }
+}
+
+export async function getCustomAudioInfo() {
+  try {
+    const db = await openAudioDb()
+    if (!db) return {}
+    const tx = db.transaction(STORE_NAME, 'readonly')
+    const store = tx.objectStore(STORE_NAME)
+    const get = (k) =>
+      new Promise((res) => {
+        const r = store.get(k)
+        r.onsuccess = () => res(r.result)
+        r.onerror = () => res(null)
+      })
+    const intro = await get('intro')
+    const game = await get('game')
+    return {
+      intro: intro ? intro.name : null,
+      game: game ? game.name : null,
+    }
+  } catch {
+    return {}
+  }
+}
+
+// Inicializa faixas salvas se houver
+if (typeof window !== 'undefined') {
+  openAudioDb().then(async (db) => {
+    if (!db) return
+    const tx = db.transaction(STORE_NAME, 'readonly')
+    const store = tx.objectStore(STORE_NAME)
+    const reqIntro = store.get('intro')
+    reqIntro.onsuccess = () => {
+      if (reqIntro.result?.file && musicaIntro) {
+        musicaIntro.src = URL.createObjectURL(reqIntro.result.file)
+        musicaIntro.load()
+        playIntro()
+      }
+    }
+    const reqGame = store.get('game')
+    reqGame.onsuccess = () => {
+      if (reqGame.result?.file && musicaJogo) {
+        musicaJogo.src = URL.createObjectURL(reqGame.result.file)
+        musicaJogo.load()
+      }
+    }
+  })
+}
+
+/**
+ * Função de Fade Out:
+ * Reduz gradualmente o volume do áudio até zero ao longo da duração especificada
+ * e pausa a reprodução, restaurando o volume original para a próxima vez.
+ *
+ * @param {HTMLAudioElement} audio - O áudio que você quer diminuir
+ * @param {number} duracao - A duração do efeito em milissegundos
+ */
+export function fadeOut(audio, duracao = 2000) {
+  if (!audio) return
+
+  // Guarda o volume original para podermos restaurar depois
+  const volumeOriginal = audio.volume !== undefined ? audio.volume : 1
+
+  // Define um intervalo para reduzir o volume a cada 50 milissegundos
+  const taxaDeAtualizacao = 50
+  const passo = volumeOriginal / (duracao / taxaDeAtualizacao)
+
+  const transicao = setInterval(() => {
+    // Reduz o volume aos poucos
+    if (audio.volume > passo) {
+      audio.volume -= passo
+    } else {
+      // Quando o volume chegar perto de zero, paramos a música
+      audio.volume = 0
+      try {
+        audio.pause()
+      } catch (e) {
+        /* ignore */
+      }
+      try {
+        audio.currentTime = 0 // Reseta para o início
+      } catch (e) {
+        /* ignore */
+      }
+
+      // Restaura o volume original para a próxima vez que a música for tocar
+      audio.volume = volumeOriginal
+
+      // Encerra o temporizador
+      clearInterval(transicao)
+    }
+  }, taxaDeAtualizacao)
+}
+
+export function playIntro() {
+  if (!musicaIntro || muted) return
+  try {
+    musicaIntro.play()?.catch(() => {
+      // Navegadores bloqueiam autoplay até interação do usuário
+    })
+  } catch (e) {}
+}
+
+export function playGameMusic() {
+  if (!musicaJogo || muted) return
+  try {
+    musicaJogo.play()?.catch(() => {})
+  } catch (e) {}
+}
+
 export function toggleMute() {
   muted = !muted
   if (master) master.gain.setTargetAtTime(muted ? 0 : 0.85, ctx.currentTime, 0.05)
+  if (musicaIntro) musicaIntro.muted = muted
+  if (musicaJogo) musicaJogo.muted = muted
   return muted
 }
