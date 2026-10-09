@@ -222,6 +222,14 @@ const noop = () => {}
 export const game = {
   phase: 'title', // title | hangar | briefing | playing | photo | debrief | paused | dying | gameover | victory
   stage: 'orbit', // orbit | entry | surface  (etapa da missão)
+  view: (() => {
+    // Visão da câmera escolhida pelo jogador (fica salva no navegador): chase | cockpit | far
+    try {
+      return localStorage.getItem('fenix-view') || 'chase'
+    } catch {
+      return 'chase'
+    }
+  })(),
   keys: {}, // teclas pressionadas (KeyW, KeyA, Space...)
   stickX: 0, // controle analógico / touch joystick (-1..1)
   stickY: 0,

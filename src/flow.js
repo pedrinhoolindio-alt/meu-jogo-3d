@@ -243,3 +243,16 @@ export function toMenu() {
 
 // Gancho de depuração (só existe quando o build é feito com VITE_DEBUG=1)
 if (import.meta.env.VITE_DEBUG && typeof window !== 'undefined') window.__flow = { openBriefing, startMission, finishMission, startEntry, endRun }
+
+// Troca a visão da câmera: perseguição → dentro da nave (cabine) → distante (tecla T / botão VISÃO)
+export const VIEW_NAMES = { chase: 'PERSEGUIÇÃO', cockpit: 'CABINE', far: 'DISTANTE' }
+export function cycleView() {
+  const order = ['chase', 'cockpit', 'far']
+  game.view = order[(order.indexOf(game.view) + 1) % order.length]
+  try {
+    localStorage.setItem('fenix-view', game.view)
+  } catch {
+    /* navegação privada: ignora */
+  }
+  ui.set({ viewToast: { id: Date.now(), text: 'VISÃO: ' + VIEW_NAMES[game.view] } })
+}

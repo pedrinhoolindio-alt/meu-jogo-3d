@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { game, CONFIG, WEAPONS, MOTHERSHIP_TYPES, ENEMY_TYPES } from '../gameState'
 import { missionProgress } from '../Director'
 import { useUI, ui } from '../store'
-import { togglePause } from '../flow'
+import { togglePause, cycleView, VIEW_NAMES } from '../flow'
 import { toggleMute } from '../audio'
 import TouchControls from './TouchControls'
 
@@ -16,6 +16,17 @@ const proj = new THREE.Vector3()
 const rel = new THREE.Vector3()
 const camFwd = new THREE.Vector3()
 const inv = new THREE.Quaternion()
+
+// Aviso rápido no centro ao trocar de visão
+function ViewToast() {
+  const t = useUI((s) => s.viewToast)
+  if (!t) return null
+  return (
+    <div key={t.id} className="view-toast">
+      {t.text}
+    </div>
+  )
+}
 
 function Banner() {
   const banner = useUI((s) => s.banner)
@@ -69,6 +80,9 @@ export default function Hud() {
         r.drone.style.display = game.droneTime > 0 ? 'block' : 'none'
         if (game.droneTime > 0) r.drone.textContent = `DRONE ${Math.ceil(game.droneTime)}s`
         r.roll.classList.toggle('cooldown', game.rollCooldown > 0)
+        r.camHint.textContent = `T · VISÃO: ${VIEW_NAMES[game.view]} · V · TRÁS · C · 360°`
+        // Na cabine, as telas do painel mostram radar e dados: o radar do HUD fica discreto
+        r.radarWrap.style.opacity = game.view === 'cockpit' && !game.lookBack ? 0.35 : 1
 
         // ---- Painel da missão: meta, realizado, atingimento e prazo ----
         const { realized, meta, pct, m } = missionProgress()
@@ -335,6 +349,9 @@ export default function Hud() {
         </div>
 
         <div className="hud-top-right">
+          <button type="button" className="hud-icon-btn" onClick={cycleView} title="Trocar visão: perseguição, cabine ou distante [T]">
+            👁
+          </button>
           <button type="button" className="hud-icon-btn" onClick={() => ui.set({ muted: toggleMute() })} title="Ativar/desativar áudio [M]">
             {ui.get().muted ? '🔇' : '🔊'}
           </button>
@@ -343,7 +360,7 @@ export default function Hud() {
           </button>
         </div>
 
-        <div className="radar-wrap">
+        <div className="radar-wrap" ref={ref('radarWrap')}>
           <canvas className="radar" ref={ref('radar')} width={170} height={170} />
           <div className="radar-info">
             <div className="loc" ref={ref('loc')} />
@@ -387,7 +404,7 @@ export default function Hud() {
           <div className="roll" ref={ref('roll')}>
             GIRO [Q/E]
           </div>
-          <div className="cam-hint">V · OLHAR PARA TRÁS · C · CÂMERA 360°</div>
+          <div className="cam-hint" ref={ref('camHint')} />
         </div>
 
         <div className="map-attrib" ref={ref('attrib')} />
@@ -395,6 +412,7 @@ export default function Hud() {
           ⚠ ESCUDO CRÍTICO ⚠
         </div>
         <Banner />
+        <ViewToast />
         <TouchControls />
       </div>
     </>

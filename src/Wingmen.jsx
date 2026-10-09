@@ -52,6 +52,9 @@ export default function Wingmen() {
         .add(game.shipPos)
       // Entre missões e na entrada da atmosfera: ficam grudados na formação
       const tight = game.phase !== 'playing' || game.stage === 'entry'
+      // Acompanha o movimento do líder (velocidade × dt) e corrige suavemente até a vaga na formação.
+      // Sem isso, a ala ficaria sempre ~15 unidades atrás (atraso do lerp = velocidade / taxa)
+      w.pos.addScaledVector(game.shipVel, dt)
       w.pos.lerp(slot, tight ? 1 : damp(3, dt))
       // Rotação: segue a do líder com atraso (slerp)
       const before = w.bank

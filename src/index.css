@@ -1866,3 +1866,32 @@ kbd {
     display: none;
   }
 }
+
+/* ------------------------------------------------ Troca de visão (T) */
+.view-toast {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 4px;
+  color: #7cf3ff;
+  text-shadow: 0 0 10px rgba(0, 200, 255, 0.8);
+  pointer-events: none;
+  animation: viewToast 1.6s ease forwards;
+}
+@keyframes viewToast {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  15%,
+  70% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+  }
+}

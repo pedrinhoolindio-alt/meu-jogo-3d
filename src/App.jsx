@@ -24,7 +24,7 @@ import Radio from './ui/Radio'
 import Screens from './ui/Screens'
 import { game } from './gameState'
 import { ui, useUI } from './store'
-import { startGame, togglePause, togglePhoto } from './flow'
+import { startGame, togglePause, togglePhoto, cycleView } from './flow'
 import { toggleMute, handleUploadedAudioFiles } from './audio'
 
 // ---------------------------------------------------------------------------
@@ -53,6 +53,7 @@ function useInput() {
       if (e.code === 'KeyB') game.wantsBomb = true
       if (e.code === 'KeyF') game.wantsMissile = true
       if (e.code === 'KeyC') togglePhoto()
+      if (e.code === 'KeyT') cycleView()
       if (e.code === 'KeyP' || e.code === 'Escape') togglePause()
       if (e.code === 'KeyM') ui.set({ muted: toggleMute() })
       const phase = ui.get().phase

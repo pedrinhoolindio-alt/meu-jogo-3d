@@ -6,6 +6,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { game, CONFIG, damp, bestTarget } from './gameState'
 import { Ship, M } from './models'
+import Cockpit from './Cockpit'
 import { sfx, setEngine } from './audio'
 import { planetDirection } from './Space'
 import { arriveSurface, finishEntry } from './flow'
@@ -27,6 +28,11 @@ const tmp = new THREE.Vector3()
 const tmp2 = new THREE.Vector3()
 const desired = new THREE.Vector3()
 const lookM = new THREE.Matrix4()
+const Z = new THREE.Vector3(0, 0, 1)
+const qRoll = new THREE.Quaternion()
+// Visões da câmera (tecla T / botão VISÃO): perseguição, de dentro da nave e distante
+const COCKPIT_EYE = new THREE.Vector3(0, 0.62, -0.9) // olhos do piloto, no espaço da nave
+const FAR_OFFSET = new THREE.Vector3(0, 6.5, 27)
 let lastEngine = -1
 let wasOrbit = false
 
@@ -71,6 +77,7 @@ export default function Player() {
   const crossMats = useRef([])
   const flames = useRef([])
   const plasma = useRef()
+  const cockpit = useRef()
   const turn = useRef({ x: 0, y: 0 }) // comando de curva suavizado (-1..1)
 
   const plasmaUniforms = useMemo(() => ({ intensity: { value: 0 }, time: { value: 0 } }), [])
@@ -315,20 +322,45 @@ export default function Player() {
     // posição = nave + offset girado pela rotação suavizada
     smoothQ.slerp(s.quaternion, damp(entering ? 2.5 : CONFIG.cameraFollow, raw))
     const back = game.lookBack && playing
-    tmp.copy(back ? CONFIG.cameraBackOffset : CONFIG.cameraOffset).applyQuaternion(smoothQ).add(s.position)
-    camPos.lerp(tmp, damp(back ? 8 : 14, raw))
+    // Dentro da nave só durante o voo (no menu e entre missões fica a visão de fora)
+    const inside = game.view === 'cockpit' && !back && game.phase !== 'title' && !dead
     // Tremor de tela: deslocamento aleatório proporcional a shake² (cai rápido)
     game.shake = Math.max(0, game.shake - raw * 1.6)
-    const sh = game.shake * game.shake * 0.6
-    cam.position.set(camPos.x + (Math.random() - 0.5) * sh, camPos.y + (Math.random() - 0.5) * sh, camPos.z + (Math.random() - 0.5) * sh)
-    // Olha para um ponto à frente da nave, com o "teto" da câmera = teto suavizado da nave
-    cam.up.set(0, 1, 0).applyQuaternion(smoothQ)
-    if (back) tmp.copy(s.position).addScaledVector(game.shipFwd, -40)
-    else tmp.set(0, 0, -30).applyQuaternion(smoothQ).add(s.position)
-    cam.lookAt(tmp)
+    const sh = game.shake * game.shake * (inside ? 0.25 : 0.6)
+    if (inside) {
+      // ---- Visão de DENTRO da nave ----
+      // Câmera presa aos olhos do piloto: posição = nave + rotação · olhos.
+      // Rotação = a da nave + parte da inclinação das curvas e o giro completo do barrel roll
+      const b = bank.current
+      const barrel = b.rotation.z - (b.userData.roll || 0)
+      qRoll.setFromAxisAngle(Z, (b.userData.roll || 0) * 0.35 + barrel)
+      cam.quaternion.copy(s.quaternion).multiply(qRoll)
+      tmp.copy(COCKPIT_EYE).applyQuaternion(s.quaternion).add(s.position)
+      cam.position.set(tmp.x + (Math.random() - 0.5) * sh, tmp.y + (Math.random() - 0.5) * sh, tmp.z + (Math.random() - 0.5) * sh)
+      cam.up.set(0, 1, 0).applyQuaternion(cam.quaternion)
+      camPos.copy(tmp) // ao voltar para fora, a câmera sai suavemente daqui
+    } else {
+      const offset = back ? CONFIG.cameraBackOffset : game.view === 'far' ? FAR_OFFSET : CONFIG.cameraOffset
+      tmp.copy(offset).applyQuaternion(smoothQ).add(s.position)
+      camPos.lerp(tmp, damp(back ? 8 : 14, raw))
+      cam.position.set(camPos.x + (Math.random() - 0.5) * sh, camPos.y + (Math.random() - 0.5) * sh, camPos.z + (Math.random() - 0.5) * sh)
+      // Olha para um ponto à frente da nave, com o "teto" da câmera = teto suavizado da nave
+      cam.up.set(0, 1, 0).applyQuaternion(smoothQ)
+      if (back) tmp.copy(s.position).addScaledVector(game.shipFwd, -40)
+      else tmp.set(0, 0, game.view === 'far' ? -60 : -30).applyQuaternion(smoothQ).add(s.position)
+      cam.lookAt(tmp)
+    }
+    // Cabine: acompanha a câmera; a nave por fora some (a câmera está dentro dela)
+    const ck = cockpit.current
+    ck.visible = inside
+    if (inside) {
+      ck.position.copy(cam.position)
+      ck.quaternion.copy(cam.quaternion)
+    }
+    bank.current.visible = !inside
 
     // Campo de visão abre no turbo (sensação de velocidade)
-    const targetFov = game.boosting || (entering && game.entryT < 3.6) ? 84 : 70
+    const targetFov = game.boosting || (entering && game.entryT < 3.6) ? 84 : inside ? 76 : 70
     if (Math.abs(cam.fov - targetFov) > 0.05) {
       cam.fov = lerp(cam.fov, targetFov, damp(4, raw))
       cam.updateProjectionMatrix()
@@ -373,6 +405,8 @@ export default function Player() {
           />
         </mesh>
       </group>
+
+      <Cockpit ref={cockpit} />
 
       {/* ===== MIRA ===== (verde = livre, vermelha = alvo travado pela mira automática) */}
       <group ref={crosshair}>

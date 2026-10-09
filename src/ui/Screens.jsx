@@ -18,6 +18,7 @@ function Controls() {
     <div className="controls">
       <div><kbd>Mouse</kbd> pilotar (aponte para onde quer virar) · voo livre 360°</div>
       <div><kbd>W</kbd> <kbd>S</kbd> subir/descer · <kbd>A</kbd> <kbd>D</kbd> virar · <b>Joystick Touch</b></div>
+      <div><kbd>T</kbd> trocar visão: perseguição · <b>dentro da nave</b> · distante</div>
       <div><kbd>V</kbd> olhar para trás · radar e setas mostram inimigos em volta</div>
       <div><kbd>Clique</kbd> / <kbd>Espaço</kbd> ou <b>Botão TIRO</b> atirar</div>
       <div><kbd>Shift</kbd> ou <b>Botão TURBO</b> acelerar</div>

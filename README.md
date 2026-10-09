@@ -18,6 +18,7 @@ npm run dev
 | Subir / descer o nariz | W / S (ou setas ↑ ↓) |
 | Virar para os lados | A / D (ou setas ← →) |
 | Olhar para trás | V (segure) |
+| Trocar visão: perseguição → **dentro da nave (cabine)** → distante | T ou botão 👁 |
 | Atirar | Clique ou Espaço (segure) — a mira trava sozinha em inimigos perto do centro |
 | Turbo | Shift |
 | Giro evasivo (rebate lasers) | Q / E |
